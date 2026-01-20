@@ -6,6 +6,7 @@
     <title>BASTION - Risk Management</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard">
@@ -133,6 +134,7 @@
     
     <script src="chart.js"></script>
     <script src="api-client.js"></script>
+    <script src="volume-profile.js"></script>
     <script>
         // State
         let state = {
@@ -149,14 +151,24 @@
             targets: [],
             guardingActive: false,
             guardingLevel: 0,
+            guardingSlope: 0,
+            vpvrData: null,
+            sessionId: null,
         };
         
         let chart = null;
+        let volumeProfile = null;
         
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
             // Create chart
             chart = new BastionChart('chart');
+            
+            // Create volume profile overlay
+            volumeProfile = new VolumeProfileOverlay(document.getElementById('chart'));
+            
+            // Check for saved session
+            checkSavedSession();
             
             // Load initial data
             await loadChartData();
@@ -168,6 +180,57 @@
             // Setup event listeners
             setupEventListeners();
         });
+        
+        function checkSavedSession() {
+            try {
+                const saved = localStorage.getItem('bastion_session');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (parsed.entryPrice && Date.now() - parsed.timestamp < 86400000) {
+                        // Session less than 24h old
+                        if (confirm('Resume previous session?')) {
+                            Object.assign(state, parsed);
+                            restoreSession();
+                        } else {
+                            localStorage.removeItem('bastion_session');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to restore session:', e);
+            }
+        }
+        
+        function restoreSession() {
+            // Update UI with saved state
+            document.getElementById('inputSymbol').value = state.symbol;
+            document.getElementById('inputEntry').value = state.entryPrice;
+            document.getElementById('inputBalance').value = state.balance;
+            document.getElementById('inputRisk').value = state.riskPct;
+            setDirection(state.direction);
+            
+            // Show sections
+            document.getElementById('positionSection').style.display = 'block';
+            document.getElementById('stopsSection').style.display = 'block';
+            document.getElementById('targetsSection').style.display = 'block';
+            document.getElementById('guardingSection').style.display = 'block';
+            
+            updatePositionDisplay();
+            updateStopsDisplay();
+            updateTargetsDisplay();
+        }
+        
+        function saveSession() {
+            try {
+                const toSave = {
+                    ...state,
+                    timestamp: Date.now(),
+                };
+                localStorage.setItem('bastion_session', JSON.stringify(toSave));
+            } catch (e) {
+                console.warn('Failed to save session:', e);
+            }
+        }
         
         function setupEventListeners() {
             // Direction toggle
@@ -218,6 +281,7 @@
         }
         
         async function loadChartData() {
+            chart.setTimeframe(state.timeframe);
             const bars = await chart.loadData(state.symbol, state.timeframe, 200);
             if (bars.length > 0) {
                 const lastBar = bars[bars.length - 1];
@@ -249,6 +313,11 @@
                 return;
             }
             
+            // Show loading state
+            const btn = document.getElementById('btnCalculate');
+            btn.disabled = true;
+            btn.textContent = 'Calculating...';
+            
             try {
                 const response = await api.calculate({
                     symbol: state.symbol,
@@ -264,19 +333,47 @@
                     return;
                 }
                 
-                // Update state
+                console.log('API Response:', response);
+                
+                // Update state from API response
                 state.positionSize = response.position_size || 0;
                 state.riskAmount = response.risk_amount || (state.balance * state.riskPct / 100);
                 state.stops = response.stops || [];
                 state.targets = response.targets || [];
                 
+                // Guarding line parameters from API
+                if (response.guarding_line) {
+                    state.guardingSlope = response.guarding_line.slope || (state.entryPrice * 0.001);
+                    state.guardingLevel = response.guarding_line.current_level || state.entryPrice;
+                }
+                
+                // VPVR data from API
+                if (response.vpvr) {
+                    state.vpvrData = response.vpvr;
+                }
+                
                 // Draw levels on chart
+                chart.setTimeframe(state.timeframe);
                 chart.drawRiskLevels(response, state.entryPrice);
+                
+                // Draw projected (inactive) guarding line
+                const slope = state.guardingSlope || (state.entryPrice * 0.001);
+                chart.drawProjectedGuardingLine(state.entryPrice, slope, state.direction, 30);
+                
+                // Draw volume profile if available
+                if (state.vpvrData && volumeProfile) {
+                    const prices = state.stops.map(s => s.price).concat(state.targets.map(t => t.price));
+                    prices.push(state.entryPrice, state.currentPrice);
+                    const minPrice = Math.min(...prices) * 0.98;
+                    const maxPrice = Math.max(...prices) * 1.02;
+                    volumeProfile.setData(state.vpvrData, { min: minPrice, max: maxPrice });
+                }
                 
                 // Update UI
                 updatePositionDisplay();
                 updateStopsDisplay();
                 updateTargetsDisplay();
+                updateGuardingDisplay();
                 
                 // Show sections
                 document.getElementById('positionSection').style.display = 'block';
@@ -284,10 +381,21 @@
                 document.getElementById('targetsSection').style.display = 'block';
                 document.getElementById('guardingSection').style.display = 'block';
                 
+                // Save session
+                saveSession();
+                
             } catch (e) {
                 console.error('Calculate failed:', e);
-                alert('Calculation failed');
+                alert('Calculation failed: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Calculate Risk';
             }
+        }
+        
+        function updateGuardingDisplay() {
+            const level = state.guardingLevel || state.entryPrice;
+            document.getElementById('guardingValue').textContent = formatPrice(level);
         }
         
         function updatePositionDisplay() {
@@ -369,11 +477,17 @@
             if (state.guardingActive) return;
             
             state.guardingActive = true;
+            
+            // Calculate guard level based on current price with buffer
             state.guardingLevel = state.direction === 'long'
                 ? state.currentPrice * 0.98
                 : state.currentPrice * 1.02;
             
-            chart.drawGuarding(state.guardingLevel, true);
+            // Calculate slope (price increase per bar)
+            const slope = state.guardingSlope || (state.entryPrice * 0.001);
+            
+            // Draw ANGLED guarding line
+            chart.drawAngledGuardingLine(state.guardingLevel, slope, state.direction, 30);
             
             const statusEl = document.getElementById('guardingStatus');
             statusEl.classList.add('active');
@@ -381,6 +495,9 @@
             document.getElementById('guardingValue').textContent = formatPrice(state.guardingLevel);
             document.getElementById('btnActivateGuard').textContent = 'Guard Active';
             document.getElementById('btnActivateGuard').disabled = true;
+            
+            // Save session with guard active
+            saveSession();
         }
         
         function formatPrice(price) {

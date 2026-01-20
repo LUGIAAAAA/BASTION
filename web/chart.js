@@ -9,8 +9,11 @@ class BastionChart {
         this.chart = null;
         this.candleSeries = null;
         this.volumeSeries = null;
+        this.guardingLineSeries = null;
         this.lines = {};
         this.markers = [];
+        this.lastBarTime = 0;
+        this.timeframeSeconds = 14400; // 4h default
         
         this.colors = {
             background: '#0d1117',
@@ -18,17 +21,17 @@ class BastionChart {
             text: '#8b949e',
             textBright: '#c9d1d9',
             
-            // Level colors
-            entry: '#d29922',
-            stop: '#f85149',
-            stopSecondary: '#da3633',
-            safety: '#ff9800',
-            target: '#3fb950',
-            guarding: '#58a6ff',
+            // Level colors (muted Bloomberg tones)
+            entry: '#bb8009',       // Muted amber
+            stop: '#da3633',        // Muted red
+            stopSecondary: '#a12d2a',
+            safety: '#bd5d12',      // Muted orange
+            target: '#238636',      // Muted green
+            guarding: '#388bfd',    // Muted blue
             
             // Candles
-            up: '#3fb950',
-            down: '#f85149',
+            up: '#238636',
+            down: '#da3633',
         };
         
         this.options = {
@@ -101,6 +104,17 @@ class BastionChart {
             });
         }
         
+        // Angled guarding line series
+        this.guardingLineSeries = this.chart.addLineSeries({
+            color: this.colors.guarding,
+            lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            priceLineVisible: false,
+            lastValueVisible: true,
+            crosshairMarkerVisible: false,
+            title: 'GUARD',
+        });
+        
         // Resize observer
         this.resizeObserver = new ResizeObserver(() => this.resize());
         this.resizeObserver.observe(this.container);
@@ -137,6 +151,11 @@ class BastionChart {
             const unique = candles.filter((c, i, arr) => i === 0 || c.time !== arr[i-1].time);
             
             this.candleSeries.setData(unique);
+            
+            // Track last bar time for guarding line projection
+            if (unique.length > 0) {
+                this.lastBarTime = unique[unique.length - 1].time;
+            }
             
             // Volume data
             if (this.volumeSeries && data.bars[0].volume !== undefined) {
@@ -218,11 +237,14 @@ class BastionChart {
         return this.lines[key];
     }
     
-    // Draw guarding line
+    // Draw guarding line (horizontal - for inactive state)
     drawGuarding(price, active = false) {
         if (this.lines.guarding) {
             this.candleSeries.removePriceLine(this.lines.guarding);
         }
+        
+        // Clear angled line if drawing horizontal
+        this.guardingLineSeries.setData([]);
         
         this.lines.guarding = this.candleSeries.createPriceLine({
             price: price,
@@ -234,6 +256,84 @@ class BastionChart {
         });
         
         return this.lines.guarding;
+    }
+    
+    // Draw ANGLED guarding line (using LineSeries)
+    drawAngledGuardingLine(startPrice, slope, direction = 'long', barsToProject = 30) {
+        // Remove horizontal guarding line if exists
+        if (this.lines.guarding) {
+            this.candleSeries.removePriceLine(this.lines.guarding);
+            delete this.lines.guarding;
+        }
+        
+        if (!this.lastBarTime) {
+            console.warn('No bar data loaded, cannot draw angled line');
+            return;
+        }
+        
+        const data = [];
+        const slopeDir = direction === 'long' ? 1 : -1;
+        
+        // Generate points along the guarding line
+        for (let i = 0; i <= barsToProject; i++) {
+            const time = this.lastBarTime + (i * this.timeframeSeconds);
+            const price = startPrice + (slope * slopeDir * i);
+            data.push({ time, value: price });
+        }
+        
+        // Style based on active state
+        this.guardingLineSeries.applyOptions({
+            color: this.colors.guarding,
+            lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.Solid,
+        });
+        
+        this.guardingLineSeries.setData(data);
+    }
+    
+    // Draw projected (inactive) guarding line
+    drawProjectedGuardingLine(startPrice, slope, direction = 'long', barsToProject = 30) {
+        if (!this.lastBarTime) return;
+        
+        const data = [];
+        const slopeDir = direction === 'long' ? 1 : -1;
+        
+        for (let i = 0; i <= barsToProject; i++) {
+            const time = this.lastBarTime + (i * this.timeframeSeconds);
+            const price = startPrice + (slope * slopeDir * i);
+            data.push({ time, value: price });
+        }
+        
+        // Dashed, muted for inactive
+        this.guardingLineSeries.applyOptions({
+            color: this.colors.guarding + '60',
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Dotted,
+        });
+        
+        this.guardingLineSeries.setData(data);
+    }
+    
+    // Set timeframe for proper time calculations
+    setTimeframe(tf) {
+        const map = {
+            '1m': 60,
+            '5m': 300,
+            '15m': 900,
+            '1h': 3600,
+            '4h': 14400,
+            '1d': 86400,
+        };
+        this.timeframeSeconds = map[tf] || 14400;
+    }
+    
+    // Clear guarding line
+    clearGuardingLine() {
+        if (this.lines.guarding) {
+            this.candleSeries.removePriceLine(this.lines.guarding);
+            delete this.lines.guarding;
+        }
+        this.guardingLineSeries.setData([]);
     }
     
     // Draw all risk levels from API response
@@ -272,6 +372,11 @@ class BastionChart {
             }
         });
         this.lines = {};
+        
+        // Also clear guarding line series
+        if (this.guardingLineSeries) {
+            this.guardingLineSeries.setData([]);
+        }
     }
     
     // Update last candle (for live updates)
