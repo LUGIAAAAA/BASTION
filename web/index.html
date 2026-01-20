@@ -3,136 +3,841 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BASTION - Risk Calculator</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>BASTION</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0a0a0a;
+            --surface: #111111;
+            --surface-2: #1a1a1a;
+            --border: #2a2a2a;
+            --text: #e0e0e0;
+            --text-dim: #666;
+            --accent: #dc143c;
+            --accent-glow: rgba(220, 20, 60, 0.3);
+            --green: #00c853;
+            --green-dim: rgba(0, 200, 83, 0.15);
+            --red: #dc143c;
+            --red-dim: rgba(220, 20, 60, 0.15);
+            --gold: #ffd700;
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .app {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 24px 16px;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .logo {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: 0.15em;
+            color: #888;
+            margin-bottom: 4px;
+        }
+
+        .status {
+            font-size: 0.75rem;
+            color: var(--green);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--green);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Live Price */
+        .live-price {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .symbol-select {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .symbol-btn {
+            padding: 8px 16px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-dim);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .symbol-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        .symbol-btn:hover:not(.active) {
+            border-color: var(--accent);
+            color: var(--text);
+        }
+
+        .price-display {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .price-change {
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .price-change.up { color: var(--green); }
+        .price-change.down { color: var(--red); }
+
+        /* Direction Toggle */
+        .direction-toggle {
+            display: flex;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+
+        .direction-btn {
+            flex: 1;
+            padding: 20px;
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .direction-btn.long.active {
+            background: var(--green-dim);
+            color: var(--green);
+        }
+
+        .direction-btn.short.active {
+            background: var(--red-dim);
+            color: var(--red);
+        }
+
+        /* Quick Settings */
+        .settings {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .setting-group {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .setting-label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 8px;
+        }
+
+        .setting-input {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 10px;
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+        }
+
+        .setting-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        /* Calculate Button */
+        .calculate-btn {
+            width: 100%;
+            padding: 20px;
+            background: linear-gradient(135deg, var(--accent) 0%, #8b0000 100%);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 24px var(--accent-glow);
+        }
+
+        .calculate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px var(--accent-glow);
+        }
+
+        .calculate-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Results */
+        .results {
+            margin-top: 32px;
+            display: none;
+        }
+
+        .results.show {
+            display: block;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Price Ladder */
+        .price-ladder {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .ladder-title {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .ladder-levels {
+            position: relative;
+        }
+
+        .ladder-line {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, var(--green), var(--text-dim), var(--red));
+            transform: translateX(-50%);
+        }
+
+        .ladder-level {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            position: relative;
+        }
+
+        .ladder-level.target {
+            justify-content: flex-start;
+        }
+
+        .ladder-level.entry {
+            justify-content: center;
+        }
+
+        .ladder-level.stop {
+            justify-content: flex-end;
+        }
+
+        .level-box {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            min-width: 140px;
+        }
+
+        .level-box.target {
+            border-color: var(--green);
+            background: var(--green-dim);
+        }
+
+        .level-box.entry {
+            border-color: var(--gold);
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        .level-box.stop {
+            border-color: var(--red);
+            background: var(--red-dim);
+        }
+
+        .level-type {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .level-price {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .level-box.target .level-price { color: var(--green); }
+        .level-box.entry .level-price { color: var(--gold); }
+        .level-box.stop .level-price { color: var(--red); }
+
+        .level-meta {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+
+        /* Position Card */
+        .position-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .position-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .position-item {
+            text-align: center;
+        }
+
+        .position-label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+
+        .position-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .position-value.highlight {
+            color: var(--gold);
+        }
+
+        /* Context Scores */
+        .context-scores {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .context-score {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 8px;
+            text-align: center;
+        }
+
+        .score-label {
+            font-size: 0.6rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .score-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .score-value.high { color: var(--green); }
+        .score-value.mid { color: var(--gold); }
+        .score-value.low { color: var(--red); }
+
+        /* Copy Button */
+        .copy-btn {
+            width: 100%;
+            padding: 16px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            background: var(--surface);
+            border-color: var(--accent);
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Error */
+        .error {
+            display: none;
+            background: var(--red-dim);
+            border: 1px solid var(--red);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+            color: var(--red);
+            text-align: center;
+        }
+
+        .error.show {
+            display: block;
+        }
+
+        /* Mobile */
+        @media (max-width: 480px) {
+            .price-display {
+                font-size: 2rem;
+            }
+            .context-scores {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>BASTION</h1>
-            <p class="tagline">Strategy-Agnostic Risk Management</p>
-            <nav class="nav-tabs">
-                <a href="index.html" class="nav-tab active">Calculator</a>
-                <a href="session.html" class="nav-tab">Sessions</a>
-            </nav>
+    <div class="app">
+        <header class="header">
+            <div class="logo">BASTION</div>
+            <div class="status">
+                <span class="status-dot"></span>
+                <span id="statusText">Connecting...</span>
+            </div>
         </header>
 
-        <div class="calculator">
-            <form id="riskForm">
-                <div class="form-group">
-                    <label for="symbol">Symbol</label>
-                    <input type="text" id="symbol" name="symbol" value="BTCUSDT" required>
+        <!-- Live Price -->
+        <div class="live-price">
+            <div class="symbol-select">
+                <button class="symbol-btn active" data-symbol="BTCUSDT">BTC</button>
+                <button class="symbol-btn" data-symbol="ETHUSDT">ETH</button>
+                <button class="symbol-btn" data-symbol="SOLUSDT">SOL</button>
+            </div>
+            <div class="price-display" id="priceDisplay">$--,---</div>
+            <div class="price-change" id="priceChange">
+                <span>Loading...</span>
+            </div>
+        </div>
+
+        <!-- Direction Toggle -->
+        <div class="direction-toggle">
+            <button class="direction-btn long active" data-dir="long">LONG</button>
+            <button class="direction-btn short" data-dir="short">SHORT</button>
+        </div>
+
+        <!-- Quick Settings -->
+        <div class="settings">
+            <div class="setting-group">
+                <div class="setting-label">Account Balance</div>
+                <input type="number" class="setting-input" id="accountBalance" value="100000" step="1000">
+            </div>
+            <div class="setting-group">
+                <div class="setting-label">Risk %</div>
+                <input type="number" class="setting-input" id="riskPct" value="1.0" step="0.1" min="0.1" max="5">
+            </div>
+        </div>
+
+        <!-- Calculate Button -->
+        <button class="calculate-btn" id="calculateBtn" onclick="calculate()">
+            Calculate Risk Levels
+        </button>
+
+        <!-- Loading -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div>Analyzing market structure...</div>
+        </div>
+
+        <!-- Error -->
+        <div class="error" id="error"></div>
+
+        <!-- Results -->
+        <div class="results" id="results">
+            <!-- Context Scores -->
+            <div class="context-scores">
+                <div class="context-score">
+                    <div class="score-label">Structure</div>
+                    <div class="score-value" id="scoreStructure">-</div>
                 </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="entry_price">Entry Price</label>
-                        <input type="number" id="entry_price" name="entry_price" step="0.01" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="direction">Direction</label>
-                        <select id="direction" name="direction" required>
-                            <option value="long">LONG</option>
-                            <option value="short">SHORT</option>
-                        </select>
-                    </div>
+                <div class="context-score">
+                    <div class="score-label">Volume</div>
+                    <div class="score-value" id="scoreVolume">-</div>
                 </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="timeframe">Timeframe</label>
-                        <select id="timeframe" name="timeframe">
-                            <option value="15m">15m</option>
-                            <option value="1h">1H</option>
-                            <option value="4h" selected>4H</option>
-                            <option value="1d">1D</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="risk_pct">Risk %</label>
-                        <input type="number" id="risk_pct" name="risk_pct" value="1.0" step="0.1" min="0.1" max="10" required>
-                    </div>
+                <div class="context-score">
+                    <div class="score-label">Flow</div>
+                    <div class="score-value" id="scoreFlow">-</div>
                 </div>
-
-                <div class="form-group">
-                    <label for="account_balance">Account Balance</label>
-                    <input type="number" id="account_balance" name="account_balance" value="100000" step="1000" required>
+                <div class="context-score">
+                    <div class="score-label">MTF</div>
+                    <div class="score-value" id="scoreMTF">-</div>
                 </div>
-
-                <button type="submit" class="btn-calculate" id="calculateBtn">
-                    Calculate Risk Levels
-                </button>
-            </form>
-
-            <div id="loading" class="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>Analyzing structure, volume, order flow...</p>
             </div>
 
-            <div id="error" class="error" style="display: none;"></div>
-
-            <div id="results" class="results" style="display: none;">
-                <div class="results-header">
-                    <h2 id="resultsTitle"></h2>
-                    <button class="btn-copy" onclick="copyLevels()">Copy Levels</button>
+            <!-- Price Ladder -->
+            <div class="price-ladder">
+                <div class="ladder-title">Price Levels</div>
+                <div class="ladder-levels" id="ladderLevels">
+                    <!-- Filled by JS -->
                 </div>
+            </div>
 
-                <div class="price-info">
-                    <div class="price-item">
-                        <span class="label">Entry:</span>
-                        <span id="entryPrice" class="value"></span>
+            <!-- Position Card -->
+            <div class="position-card">
+                <div class="position-grid">
+                    <div class="position-item">
+                        <div class="position-label">Size</div>
+                        <div class="position-value" id="posSize">-</div>
                     </div>
-                    <div class="price-item">
-                        <span class="label">Current:</span>
-                        <span id="currentPrice" class="value"></span>
+                    <div class="position-item">
+                        <div class="position-label">Risk</div>
+                        <div class="position-value highlight" id="posRisk">-</div>
                     </div>
-                </div>
-
-                <!-- Market Context Section -->
-                <div class="market-context" id="marketContext">
-                    <h3>📈 MARKET CONTEXT</h3>
-                    <div class="context-grid">
-                        <div class="context-item">
-                            <span class="context-label">Structure</span>
-                            <span class="context-value" id="structureQuality">-</span>
-                        </div>
-                        <div class="context-item">
-                            <span class="context-label">Volume</span>
-                            <span class="context-value" id="volumeScore">-</span>
-                        </div>
-                        <div class="context-item">
-                            <span class="context-label">Order Flow</span>
-                            <span class="context-value" id="orderflowBias">-</span>
-                        </div>
-                        <div class="context-item">
-                            <span class="context-label">MTF Align</span>
-                            <span class="context-value" id="mtfAlignment">-</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="levels-grid">
-                    <div class="levels-section">
-                        <h3>🛑 STOPS</h3>
-                        <div id="stops"></div>
-                    </div>
-
-                    <div class="levels-section">
-                        <h3>🎯 TARGETS</h3>
-                        <div id="targets"></div>
-                    </div>
-
-                    <div class="levels-section">
-                        <h3>📊 POSITION</h3>
-                        <div id="position"></div>
+                    <div class="position-item">
+                        <div class="position-label">R:R</div>
+                        <div class="position-value" id="posRR">-</div>
                     </div>
                 </div>
             </div>
+
+            <!-- Copy Button -->
+            <button class="copy-btn" onclick="copyLevels()">
+                Copy Trade Plan
+            </button>
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <script>
+        const API = 'http://localhost:8001';
+        let currentSymbol = 'BTCUSDT';
+        let currentDirection = 'long';
+        let currentPrice = 0;
+        let currentData = null;
+        let priceInterval = null;
+
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            initSymbolButtons();
+            initDirectionButtons();
+            startPriceFeed();
+        });
+
+        function initSymbolButtons() {
+            document.querySelectorAll('.symbol-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.symbol-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentSymbol = btn.dataset.symbol;
+                    fetchPrice();
+                });
+            });
+        }
+
+        function initDirectionButtons() {
+            document.querySelectorAll('.direction-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.direction-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentDirection = btn.dataset.dir;
+                });
+            });
+        }
+
+        function startPriceFeed() {
+            fetchPrice();
+            priceInterval = setInterval(fetchPrice, 3000);
+        }
+
+        async function fetchPrice() {
+            try {
+                const res = await fetch(`${API}/price/${currentSymbol}`);
+                const data = await res.json();
+                
+                if (data.price > 0) {
+                    currentPrice = data.price;
+                    document.getElementById('priceDisplay').textContent = formatPrice(data.price);
+                    
+                    const changeEl = document.getElementById('priceChange');
+                    const changeVal = data.change_24h_pct || 0;
+                    changeEl.innerHTML = `
+                        <span>${changeVal >= 0 ? '+' : ''}${changeVal.toFixed(2)}%</span>
+                        <span style="color: var(--text-dim)">24h</span>
+                    `;
+                    changeEl.className = `price-change ${changeVal >= 0 ? 'up' : 'down'}`;
+                    
+                    document.getElementById('statusText').textContent = 'Live';
+                } else {
+                    // Fallback - fetch from calculate to get current_price
+                    const calcRes = await fetch(`${API}/calculate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            symbol: currentSymbol,
+                            entry_price: 100000,
+                            direction: 'long',
+                            timeframe: '4h',
+                            account_balance: 100000
+                        })
+                    });
+                    const calcData = await calcRes.json();
+                    if (calcData.current_price) {
+                        currentPrice = calcData.current_price;
+                        document.getElementById('priceDisplay').textContent = formatPrice(calcData.current_price);
+                        document.getElementById('statusText').textContent = 'Live';
+                    }
+                }
+            } catch (e) {
+                console.error('Price fetch error:', e);
+                document.getElementById('statusText').textContent = 'Reconnecting...';
+            }
+        }
+
+        async function calculate() {
+            const btn = document.getElementById('calculateBtn');
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            const error = document.getElementById('error');
+            
+            btn.disabled = true;
+            loading.classList.add('show');
+            results.classList.remove('show');
+            error.classList.remove('show');
+            
+            try {
+                const entryPrice = currentPrice || 100000;
+                const accountBalance = parseFloat(document.getElementById('accountBalance').value) || 100000;
+                const riskPct = parseFloat(document.getElementById('riskPct').value) || 1.0;
+                
+                const res = await fetch(`${API}/calculate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        symbol: currentSymbol,
+                        entry_price: entryPrice,
+                        direction: currentDirection,
+                        timeframe: '4h',
+                        account_balance: accountBalance,
+                        risk_per_trade_pct: riskPct
+                    })
+                });
+                
+                if (!res.ok) throw new Error('Calculation failed');
+                
+                currentData = await res.json();
+                displayResults(currentData);
+                
+            } catch (e) {
+                error.textContent = e.message;
+                error.classList.add('show');
+            } finally {
+                btn.disabled = false;
+                loading.classList.remove('show');
+            }
+        }
+
+        function displayResults(data) {
+            const results = document.getElementById('results');
+            
+            // Context Scores
+            const mc = data.market_context || {};
+            setScore('scoreStructure', mc.structure_quality || 0, 10);
+            setScore('scoreVolume', mc.volume_profile_score || 0, 10);
+            setScore('scoreMTF', (mc.mtf_alignment || 0) * 10, 10);
+            
+            const flowEl = document.getElementById('scoreFlow');
+            const flow = mc.orderflow_bias || 'neutral';
+            flowEl.textContent = flow.charAt(0).toUpperCase();
+            flowEl.className = `score-value ${flow === 'bullish' ? 'high' : flow === 'bearish' ? 'low' : 'mid'}`;
+            
+            // Price Ladder
+            renderLadder(data);
+            
+            // Position
+            document.getElementById('posSize').textContent = data.position_size.toFixed(4);
+            document.getElementById('posRisk').textContent = `$${data.risk_amount.toLocaleString()}`;
+            document.getElementById('posRR').textContent = `${data.risk_reward_ratio.toFixed(1)}R`;
+            
+            results.classList.add('show');
+        }
+
+        function setScore(id, value, max) {
+            const el = document.getElementById(id);
+            const score = (value / max) * 10;
+            el.textContent = score.toFixed(1);
+            el.className = `score-value ${score >= 7 ? 'high' : score >= 4 ? 'mid' : 'low'}`;
+        }
+
+        function renderLadder(data) {
+            const container = document.getElementById('ladderLevels');
+            let html = '';
+            
+            // Targets (top)
+            const targets = data.targets.slice().reverse();
+            targets.forEach((t, i) => {
+                html += `
+                    <div class="ladder-level target">
+                        <div class="level-box target">
+                            <div class="level-type">T${targets.length - i} (${t.exit_percentage}%)</div>
+                            <div class="level-price">${formatPrice(t.price)}</div>
+                            <div class="level-meta">+${t.distance_pct.toFixed(1)}%</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            // Entry (middle)
+            html += `
+                <div class="ladder-level entry">
+                    <div class="level-box entry">
+                        <div class="level-type">Entry</div>
+                        <div class="level-price">${formatPrice(data.entry_price)}</div>
+                    </div>
+                </div>
+            `;
+            
+            // Stops (bottom)
+            data.stops.forEach((s, i) => {
+                html += `
+                    <div class="ladder-level stop">
+                        <div class="level-box stop">
+                            <div class="level-type">${s.type.replace('_', ' ')}</div>
+                            <div class="level-price">${formatPrice(s.price)}</div>
+                            <div class="level-meta">-${s.distance_pct.toFixed(1)}%</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        function formatPrice(price) {
+            if (price >= 1000) {
+                return '$' + price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+            return '$' + price.toFixed(4);
+        }
+
+        function copyLevels() {
+            if (!currentData) return;
+            
+            const d = currentData;
+            let text = `${d.symbol} ${d.direction.toUpperCase()}\n`;
+            text += `Entry: ${formatPrice(d.entry_price)}\n\n`;
+            
+            text += `TARGETS:\n`;
+            d.targets.forEach((t, i) => {
+                text += `  T${i+1}: ${formatPrice(t.price)} (+${t.distance_pct.toFixed(1)}%)\n`;
+            });
+            
+            text += `\nSTOPS:\n`;
+            d.stops.forEach(s => {
+                text += `  ${s.type}: ${formatPrice(s.price)} (-${s.distance_pct.toFixed(1)}%)\n`;
+            });
+            
+            text += `\nSIZE: ${d.position_size.toFixed(4)}\n`;
+            text += `RISK: $${d.risk_amount.toLocaleString()}\n`;
+            text += `R:R: ${d.risk_reward_ratio.toFixed(1)}R\n`;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = 'Copy Trade Plan', 2000);
+            });
+        }
+    </script>
 </body>
 </html>
