@@ -19,9 +19,9 @@ from pathlib import Path
 
 # Add parent directory to path for imports
 bastion_path = Path(__file__).parent.parent
-sys.path.insert(0, str(bastion_path.parent))
+sys.path.insert(0, str(bastion_path))
 
-from bastion.api.models import (
+from api.models import (
     CalculateRiskRequest,
     RiskLevelsResponse,
     ErrorResponse,
@@ -29,9 +29,9 @@ from bastion.api.models import (
     StopLevelResponse,
     TargetLevelResponse
 )
-from bastion.core.engine import RiskEngine
-from bastion.core.models import TradeSetup, MarketContext
-from bastion.data.fetcher import LiveDataFetcher
+from core.engine import RiskEngine
+from core.models import TradeSetup, MarketContext
+from data.fetcher import LiveDataFetcher
 
 import logging
 
