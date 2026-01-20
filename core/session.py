@@ -30,7 +30,7 @@ import uuid
 import asyncio
 import logging
 
-from .risk_engine import GuardingLineManager, StructureHealth
+from .risk_engine import GuardingLineManager, StructureHealth, VolatilityRegime
 from .adaptive_budget import AdaptiveRiskBudget, TradeBudget, Shot, ShotStatus
 
 logger = logging.getLogger(__name__)
@@ -144,6 +144,11 @@ class SessionState:
     guarding_line: Optional[Dict] = None  # {slope, intercept, activation_bar}
     guarding_level: Optional[float] = None
     
+    # === NEW: Breakeven tracking ===
+    breakeven_price: float = 0.0          # Price for breakeven stop
+    breakeven_hit: bool = False           # Has +1R been reached
+    moved_to_breakeven: bool = False      # Has stop moved to BE
+    
     # Target levels
     targets: List[Dict] = field(default_factory=list)
     targets_hit: int = 0
@@ -156,6 +161,14 @@ class SessionState:
     unrealized_pnl: float = 0.0
     unrealized_pnl_pct: float = 0.0
     realized_pnl: float = 0.0
+    current_r_multiple: float = 0.0       # Current R-multiple
+    
+    # === NEW: Volatility context ===
+    volatility_regime: str = "normal"
+    
+    # === NEW: Divergence tracking ===
+    divergence_detected: bool = False
+    divergence_type: Optional[str] = None
     
     # Partial exits
     partial_exits: List[PartialExit] = field(default_factory=list)
@@ -209,6 +222,9 @@ class SessionState:
                 'safety_net': self.safety_net_stop,
                 'guarding_level': self.guarding_level,
                 'guarding_active': self.phase == TradePhase.PHASE_2,
+                'breakeven_price': self.breakeven_price,
+                'breakeven_hit': self.breakeven_hit,
+                'moved_to_breakeven': self.moved_to_breakeven,
             },
             
             'targets': self.targets,
@@ -218,6 +234,10 @@ class SessionState:
                 'bars_in_trade': self.bars_in_trade,
                 'highest': self.highest_since_entry,
                 'lowest': self.lowest_since_entry,
+                'current_r_multiple': self.current_r_multiple,
+                'volatility_regime': self.volatility_regime,
+                'divergence_detected': self.divergence_detected,
+                'divergence_type': self.divergence_type,
             },
             
             'pnl': {
@@ -593,6 +613,12 @@ class SessionManager:
                 session.unrealized_pnl = (session.average_entry - current_price) * session.remaining_size
             
             session.unrealized_pnl_pct = (session.unrealized_pnl / session.account_balance) * 100
+            
+            # === NEW: Calculate R-multiple ===
+            risk_distance = abs(session.average_entry - session.structural_stop)
+            if risk_distance > 0:
+                profit_distance = (current_price - session.average_entry) if session.direction == "long" else (session.average_entry - current_price)
+                session.current_r_multiple = profit_distance / risk_distance
         
         alerts = []
         update = SessionUpdate(
@@ -606,6 +632,31 @@ class SessionManager:
             unrealized_pnl=session.unrealized_pnl,
             unrealized_pnl_pct=session.unrealized_pnl_pct,
         )
+        
+        # === NEW: Check for Breakeven at +1R ===
+        if session.current_r_multiple >= 1.0 and not session.breakeven_hit:
+            session.breakeven_hit = True
+            alerts.append(f"📈 +1R REACHED! Consider activating breakeven stop")
+            
+            # Calculate and set breakeven price
+            if session.breakeven_price == 0:
+                buffer = session.average_entry * 0.001  # 0.1% buffer
+                if session.direction == "long":
+                    session.breakeven_price = session.average_entry + buffer
+                else:
+                    session.breakeven_price = session.average_entry - buffer
+        
+        # Auto-move to breakeven at +1R
+        if session.breakeven_hit and not session.moved_to_breakeven:
+            # Check if breakeven is better than current stop
+            if session.direction == "long" and session.breakeven_price > session.current_stop:
+                session.current_stop = session.breakeven_price
+                session.moved_to_breakeven = True
+                alerts.append(f"🛡️ Stop moved to BREAKEVEN at ${session.breakeven_price:,.2f}")
+            elif session.direction == "short" and session.breakeven_price < session.current_stop:
+                session.current_stop = session.breakeven_price
+                session.moved_to_breakeven = True
+                alerts.append(f"🛡️ Stop moved to BREAKEVEN at ${session.breakeven_price:,.2f}")
         
         # === CHECK EXIT SIGNALS (Priority Order) ===
         

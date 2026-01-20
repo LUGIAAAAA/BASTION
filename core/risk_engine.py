@@ -67,6 +67,14 @@ class StructureHealth(str, Enum):
     BROKEN = "broken"       # Structure has failed
 
 
+class VolatilityRegime(str, Enum):
+    """Current volatility regime for position sizing adjustment."""
+    LOW = "low"          # ATR < 50% of 100-day average - can use tighter stops
+    NORMAL = "normal"    # ATR within 50-150% of average
+    HIGH = "high"        # ATR > 150% of average - wider stops needed
+    EXTREME = "extreme"  # ATR > 250% of average - reduce position size
+
+
 # =============================================================================
 # DATA MODELS
 # =============================================================================
@@ -135,6 +143,19 @@ class RiskLevels:
     orderflow_analysis: Optional[OrderFlowAnalysis] = None
     mtf_analysis: Optional[MTFAlignment] = None
     
+    # === NEW: Entry Gate ===
+    entry_blocked: bool = False          # True if entry should be blocked
+    block_reason: Optional[str] = None   # Reason for blocking entry
+    
+    # === NEW: Volatility Context ===
+    volatility_regime: str = "normal"    # low/normal/high/extreme
+    atr_current: float = 0.0             # Current ATR value
+    atr_pct: float = 0.0                 # ATR as % of price
+    
+    # === NEW: Breakeven tracking ===
+    breakeven_price: float = 0.0         # Price for breakeven stop
+    one_r_price: float = 0.0             # Price at +1R profit
+    
     # Timestamp
     calculated_at: datetime = field(default_factory=datetime.now)
     
@@ -156,8 +177,22 @@ class RiskLevels:
                 'volume_profile_score': self.volume_profile_score,
                 'orderflow_bias': self.orderflow_bias,
                 'mtf_alignment': self.mtf_alignment,
+                'volatility_regime': self.volatility_regime,
             },
             'guarding_line': self.guarding_line,
+            'entry_gate': {
+                'blocked': self.entry_blocked,
+                'reason': self.block_reason,
+            },
+            'volatility': {
+                'regime': self.volatility_regime,
+                'atr': self.atr_current,
+                'atr_pct': self.atr_pct,
+            },
+            'breakeven': {
+                'breakeven_price': self.breakeven_price,
+                'one_r_price': self.one_r_price,
+            },
             'calculated_at': self.calculated_at.isoformat(),
         }
     
@@ -183,6 +218,7 @@ class RiskUpdate:
     # Trailing adjustments
     stop_moved: bool = False
     new_stop_price: Optional[float] = None
+    stop_move_reason: Optional[str] = None
     
     # Guarding line status
     guarding_active: bool = False
@@ -191,6 +227,28 @@ class RiskUpdate:
     
     # Structure health
     structure_health: StructureHealth = StructureHealth.STRONG
+    
+    # === NEW: Breakeven tracking ===
+    breakeven_hit: bool = False          # True when +1R reached
+    moved_to_breakeven: bool = False     # True when stop moved to BE
+    current_r_multiple: float = 0.0      # Current R-multiple (profit/risk)
+    
+    # === NEW: Dynamic targets ===
+    new_target_added: bool = False       # True if living TP added new target
+    new_target_price: Optional[float] = None
+    
+    # === NEW: Divergence detection ===
+    divergence_detected: bool = False
+    divergence_type: Optional[str] = None  # "bearish" or "bullish"
+    
+    # === NEW: Momentum Trailing TP ===
+    momentum_trailing_active: bool = False
+    momentum_trailing_level: float = 0.0
+    momentum_slope_strength: float = 0.0  # 0-1
+    momentum_buffer_pct: float = 0.0
+    
+    # Alerts
+    alerts: List[str] = field(default_factory=list)
 
 
 # =============================================================================
@@ -231,6 +289,35 @@ class RiskEngineConfig:
     # Living Take-Profit
     enable_dynamic_targets: bool = True
     dynamic_target_threshold: float = 1.5  # Add new target at 1.5R
+    
+    # === NEW: Entry Gate ===
+    enforce_min_rr: bool = True           # Block entries below min R:R
+    min_rr_for_entry: float = 2.0         # Minimum R:R required
+    
+    # === NEW: Breakeven Stop ===
+    enable_breakeven_stop: bool = True    # Move to BE at +1R
+    breakeven_trigger_r: float = 1.0      # R-multiple to trigger BE move
+    breakeven_buffer_pct: float = 0.1     # Buffer above entry (0.1%)
+    
+    # === NEW: Volatility Regime ===
+    enable_volatility_regime: bool = True
+    volatility_lookback: int = 100        # Bars for baseline ATR
+    low_vol_threshold: float = 0.5        # Below 50% = low vol
+    high_vol_threshold: float = 1.5       # Above 150% = high vol
+    extreme_vol_threshold: float = 2.5    # Above 250% = extreme
+    extreme_vol_size_reduction: float = 0.5  # Reduce size by 50% in extreme
+    
+    # === NEW: Structure Staleness ===
+    enable_staleness_penalty: bool = True
+    staleness_threshold_bars: int = 50    # Bars before structure is "stale"
+    staleness_max_penalty: float = 2.0    # Max points to deduct
+    freshness_bonus_bars: int = 10        # Bars for "fresh" bonus
+    freshness_bonus: float = 1.5          # Points to add for fresh structure
+    
+    # === NEW: Divergence Detection ===
+    enable_divergence_detection: bool = True
+    divergence_lookback: int = 20         # Bars to check for divergence
+    rsi_period: int = 14                  # RSI calculation period
 
 
 # =============================================================================
@@ -238,11 +325,13 @@ class RiskEngineConfig:
 # =============================================================================
 
 class GuardingLineManager:
-    """Trailing structural stop for swing trades."""
+    """Trailing structural stop for swing trades with DYNAMIC slope calculation."""
     
     def __init__(self, activation_bars: int = 10, buffer_pct: float = 0.3):
         self.activation_bars = activation_bars
         self.buffer_pct = buffer_pct
+        self.min_slope_pct = 0.05   # Minimum 0.05% per bar
+        self.max_slope_pct = 0.5    # Maximum 0.5% per bar
     
     def calculate_initial_line(
         self,
@@ -251,40 +340,122 @@ class GuardingLineManager:
         price_data: List[float],
         lookback: int = 20
     ) -> Dict[str, float]:
-        """Calculate initial guarding line parameters."""
+        """
+        Calculate initial guarding line parameters with DYNAMIC slope.
+        
+        The slope is calculated from actual swing point progression,
+        not an arbitrary fixed percentage.
+        """
         if len(price_data) < 5:
+            # Fallback to default slope
+            default_slope = entry_price * (self.min_slope_pct / 100)
             return {
-                "slope": 0,
+                "slope": default_slope if direction == "long" else -default_slope,
                 "intercept": entry_price * (0.97 if direction == "long" else 1.03),
                 "activation_bar": self.activation_bars,
-                "buffer_pct": self.buffer_pct
+                "buffer_pct": self.buffer_pct,
+                "slope_source": "default"
             }
         
         recent = price_data[:min(lookback, len(price_data))]
         swing_points = self._find_swing_points(recent, direction)
         
-        if len(swing_points) < 2:
+        # Calculate slope from swing points (preferred) or all data
+        if len(swing_points) >= 2:
+            slope = self._calculate_dynamic_slope(swing_points, direction, entry_price)
+            slope_source = "swing_regression"
+        else:
+            # Fallback: use linear regression on all recent data
             x = np.arange(len(recent))
             y = np.array(recent)
-            slope, intercept = np.polyfit(x, y, 1)
-        else:
-            x = np.array([p[0] for p in swing_points])
-            y = np.array([p[1] for p in swing_points])
-            slope, intercept = np.polyfit(x, y, 1)
+            slope, _ = np.polyfit(x, y, 1)
+            slope_source = "linear_regression"
         
+        # Enforce slope direction matches trade direction
         if direction == "long":
-            slope = max(0, slope)
-            intercept = intercept * (1 - self.buffer_pct / 100)
+            slope = max(0, slope)  # Only rising guard for longs
+            # Ensure minimum slope (don't let guard go flat)
+            min_slope = entry_price * (self.min_slope_pct / 100)
+            slope = max(slope, min_slope)
         else:
-            slope = min(0, slope)
-            intercept = intercept * (1 + self.buffer_pct / 100)
+            slope = min(0, slope)  # Only falling guard for shorts
+            min_slope = -entry_price * (self.min_slope_pct / 100)
+            slope = min(slope, min_slope)
+        
+        # Cap maximum slope
+        max_slope = entry_price * (self.max_slope_pct / 100)
+        slope = max(-max_slope, min(max_slope, slope))
+        
+        # Calculate intercept with buffer
+        if direction == "long":
+            # Start below the lowest recent swing low
+            base_intercept = min(recent) if recent else entry_price * 0.97
+            intercept = base_intercept * (1 - self.buffer_pct / 100)
+        else:
+            base_intercept = max(recent) if recent else entry_price * 1.03
+            intercept = base_intercept * (1 + self.buffer_pct / 100)
         
         return {
             "slope": float(slope),
             "intercept": float(intercept),
             "activation_bar": self.activation_bars,
-            "buffer_pct": self.buffer_pct
+            "buffer_pct": self.buffer_pct,
+            "slope_source": slope_source,
+            "base_level": float(base_intercept)
         }
+    
+    def _calculate_dynamic_slope(
+        self, 
+        swing_points: List[Tuple[int, float]], 
+        direction: str,
+        entry_price: float
+    ) -> float:
+        """
+        Calculate slope from actual swing point progression.
+        
+        This gives a realistic trailing angle based on how the market
+        is actually forming higher lows (for longs) or lower highs (for shorts).
+        """
+        if len(swing_points) < 2:
+            return entry_price * (self.min_slope_pct / 100)
+        
+        # Use linear regression on swing points
+        x = np.array([p[0] for p in swing_points])
+        y = np.array([p[1] for p in swing_points])
+        
+        # Fit line to swing points
+        slope, _ = np.polyfit(x, y, 1)
+        
+        return float(slope)
+    
+    def update_slope(
+        self,
+        line_params: Dict[str, float],
+        new_swing_points: List[Tuple[int, float]],
+        direction: str,
+        entry_price: float
+    ) -> Dict[str, float]:
+        """
+        Update guarding line slope based on new swing points.
+        
+        Call this when new swing points form to adapt the guard angle.
+        """
+        if len(new_swing_points) < 2:
+            return line_params
+        
+        new_slope = self._calculate_dynamic_slope(new_swing_points, direction, entry_price)
+        
+        # Only update if new slope is more favorable (steeper for longs)
+        current_slope = line_params.get("slope", 0)
+        
+        if direction == "long" and new_slope > current_slope:
+            line_params["slope"] = new_slope
+            line_params["slope_source"] = "dynamic_update"
+        elif direction == "short" and new_slope < current_slope:
+            line_params["slope"] = new_slope
+            line_params["slope_source"] = "dynamic_update"
+        
+        return line_params
     
     def get_current_level(self, line_params: Dict[str, float], bars_since_entry: int) -> float:
         """Get current guarding line level."""
@@ -293,6 +464,7 @@ class GuardingLineManager:
         activation = line_params.get("activation_bar", self.activation_bars)
         
         if bars_since_entry < activation:
+            # Before activation, return a level far from price (inactive)
             return intercept * 0.9 if slope >= 0 else intercept * 1.1
         
         bars_active = bars_since_entry - activation
@@ -307,18 +479,342 @@ class GuardingLineManager:
         return False, ""
     
     def _find_swing_points(self, prices: List[float], direction: str) -> List[Tuple[int, float]]:
-        """Find swing lows (long) or swing highs (short)."""
+        """Find swing lows (long) or swing highs (short) using fractal detection."""
         swing_points = []
+        
+        # Need at least 5 bars for fractal detection
+        if len(prices) < 5:
+            return swing_points
+        
         for i in range(2, len(prices) - 2):
             if direction == "long":
-                if prices[i] < prices[i-1] and prices[i] < prices[i-2] and \
-                   prices[i] < prices[i+1] and prices[i] < prices[i+2]:
+                # Swing low: lower than 2 bars on each side
+                if (prices[i] < prices[i-1] and prices[i] < prices[i-2] and 
+                    prices[i] < prices[i+1] and prices[i] < prices[i+2]):
                     swing_points.append((i, prices[i]))
             else:
-                if prices[i] > prices[i-1] and prices[i] > prices[i-2] and \
-                   prices[i] > prices[i+1] and prices[i] > prices[i+2]:
+                # Swing high: higher than 2 bars on each side
+                if (prices[i] > prices[i-1] and prices[i] > prices[i-2] and 
+                    prices[i] > prices[i+1] and prices[i] > prices[i+2]):
                     swing_points.append((i, prices[i]))
+        
         return swing_points
+
+
+# =============================================================================
+# MOMENTUM TRAILING TAKE-PROFIT (Living TP)
+# =============================================================================
+
+@dataclass
+class MomentumState:
+    """Tracks the momentum trailing TP state."""
+    active: bool = False
+    trailing_level: float = 0.0           # Current trailing TP level
+    slope: float = 0.0                    # Current price slope (per bar)
+    slope_strength: float = 0.0           # 0-1, how aggressive the move is
+    bars_in_momentum: int = 0             # How long we've been trailing
+    peak_price: float = 0.0               # Best price reached
+    trail_buffer_pct: float = 0.0         # Current buffer % from price
+    last_candle_body_high: float = 0.0
+    last_candle_body_low: float = 0.0
+    activation_r: float = 0.0             # R-multiple when activated
+
+
+class MomentumTrailingTP:
+    """
+    Aggressive Momentum-Based Trailing Take-Profit.
+    
+    LOGIC:
+    1. Activate when price moves aggressively in trade direction
+    2. Calculate slope aggressiveness from recent candles
+    3. Steeper slope = tighter trail (capture the momentum)
+    4. Trail above/below candle bodies based on direction
+    5. Exit when price breaks the trailing level (momentum exhausted)
+    
+    For SHORTS in a dump:
+    - Trail ABOVE the candle bodies
+    - As price drills down, trail follows aggressively
+    - When price reverses and breaks above trail = exit with profits
+    
+    For LONGS in a pump:
+    - Trail BELOW the candle bodies
+    - As price pumps up, trail follows aggressively  
+    - When price reverses and breaks below trail = exit with profits
+    """
+    
+    def __init__(
+        self,
+        # Activation thresholds
+        min_r_to_activate: float = 1.0,        # Minimum R before trailing starts
+        min_slope_to_activate: float = 0.002,  # Minimum 0.2% per bar slope
+        
+        # Trail aggressiveness
+        base_buffer_pct: float = 0.5,          # Base buffer from price (0.5%)
+        min_buffer_pct: float = 0.15,          # Minimum buffer (aggressive trail)
+        max_buffer_pct: float = 1.5,           # Maximum buffer (relaxed trail)
+        
+        # Slope calculation
+        slope_lookback: int = 5,               # Bars to calculate slope
+        
+        # Candle trailing
+        trail_wicks: bool = False,             # Trail wicks (True) or bodies (False)
+        body_buffer_pct: float = 0.1,          # Extra buffer beyond candle body
+    ):
+        self.min_r_to_activate = min_r_to_activate
+        self.min_slope_to_activate = min_slope_to_activate
+        self.base_buffer_pct = base_buffer_pct
+        self.min_buffer_pct = min_buffer_pct
+        self.max_buffer_pct = max_buffer_pct
+        self.slope_lookback = slope_lookback
+        self.trail_wicks = trail_wicks
+        self.body_buffer_pct = body_buffer_pct
+    
+    def calculate_slope(
+        self,
+        closes: List[float],
+        direction: str
+    ) -> Tuple[float, float]:
+        """
+        Calculate price slope and its strength.
+        
+        Returns:
+            (slope_per_bar, strength 0-1)
+            
+        Strength indicates how aggressive the move is:
+        - 1.0 = Extremely aggressive (parabolic move)
+        - 0.5 = Moderate trend
+        - 0.0 = No trend / choppy
+        """
+        if len(closes) < 3:
+            return 0.0, 0.0
+        
+        recent = closes[-self.slope_lookback:] if len(closes) >= self.slope_lookback else closes
+        
+        # Calculate slope using linear regression
+        x = np.arange(len(recent))
+        y = np.array(recent)
+        
+        if len(x) < 2:
+            return 0.0, 0.0
+        
+        slope, intercept = np.polyfit(x, y, 1)
+        
+        # Normalize slope to percentage per bar
+        avg_price = np.mean(recent)
+        slope_pct = (slope / avg_price) * 100 if avg_price > 0 else 0
+        
+        # Calculate R-squared (how clean is the move)
+        y_pred = slope * x + intercept
+        ss_res = np.sum((y - y_pred) ** 2)
+        ss_tot = np.sum((y - np.mean(y)) ** 2)
+        r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
+        r_squared = max(0, min(1, r_squared))
+        
+        # Strength = magnitude of slope * cleanness of move
+        slope_magnitude = abs(slope_pct) / 1.0  # Normalize: 1% per bar = magnitude 1
+        strength = min(1.0, slope_magnitude * r_squared)
+        
+        # Direction check - slope should match trade direction
+        if direction == "long" and slope < 0:
+            strength *= 0.3  # Penalize wrong direction
+        elif direction == "short" and slope > 0:
+            strength *= 0.3
+        
+        return slope_pct, strength
+    
+    def calculate_trail_buffer(self, slope_strength: float) -> float:
+        """
+        Calculate trailing buffer based on slope strength.
+        
+        Stronger slope = tighter buffer (more aggressive trailing)
+        Weaker slope = wider buffer (give room to breathe)
+        """
+        # Inverse relationship: strong momentum = tight trail
+        # slope_strength 0 -> max_buffer
+        # slope_strength 1 -> min_buffer
+        
+        buffer_range = self.max_buffer_pct - self.min_buffer_pct
+        buffer = self.max_buffer_pct - (slope_strength * buffer_range)
+        
+        return max(self.min_buffer_pct, min(self.max_buffer_pct, buffer))
+    
+    def calculate_trail_level(
+        self,
+        current_price: float,
+        direction: str,
+        recent_candles: List[Dict[str, float]],  # [{open, high, low, close}, ...]
+        buffer_pct: float
+    ) -> float:
+        """
+        Calculate trailing level based on candle bodies/wicks.
+        
+        For LONGS: Trail below candle bodies (or wicks)
+        For SHORTS: Trail above candle bodies (or wicks)
+        """
+        if not recent_candles:
+            # Fallback to simple buffer
+            if direction == "long":
+                return current_price * (1 - buffer_pct / 100)
+            else:
+                return current_price * (1 + buffer_pct / 100)
+        
+        # Get last few candles for trailing reference
+        lookback = min(3, len(recent_candles))
+        recent = recent_candles[-lookback:]
+        
+        if direction == "long":
+            # Trail BELOW candle bodies/wicks
+            if self.trail_wicks:
+                # Trail below the lowest wick
+                reference_price = min(c['low'] for c in recent)
+            else:
+                # Trail below the lowest candle body
+                reference_price = min(min(c['open'], c['close']) for c in recent)
+            
+            # Apply additional buffer
+            trail_level = reference_price * (1 - self.body_buffer_pct / 100)
+            
+            # But never trail higher than current price minus minimum buffer
+            max_trail = current_price * (1 - self.min_buffer_pct / 100)
+            trail_level = min(trail_level, max_trail)
+            
+        else:  # SHORT
+            # Trail ABOVE candle bodies/wicks
+            if self.trail_wicks:
+                # Trail above the highest wick
+                reference_price = max(c['high'] for c in recent)
+            else:
+                # Trail above the highest candle body
+                reference_price = max(max(c['open'], c['close']) for c in recent)
+            
+            # Apply additional buffer
+            trail_level = reference_price * (1 + self.body_buffer_pct / 100)
+            
+            # But never trail lower than current price plus minimum buffer
+            min_trail = current_price * (1 + self.min_buffer_pct / 100)
+            trail_level = max(trail_level, min_trail)
+        
+        return trail_level
+    
+    def update(
+        self,
+        state: MomentumState,
+        current_price: float,
+        current_r: float,
+        direction: str,
+        recent_closes: List[float],
+        recent_candles: List[Dict[str, float]],
+    ) -> Tuple[MomentumState, bool, Optional[str]]:
+        """
+        Update momentum trailing state.
+        
+        Args:
+            state: Current momentum state
+            current_price: Current price
+            current_r: Current R-multiple profit
+            direction: 'long' or 'short'
+            recent_closes: List of recent close prices
+            recent_candles: List of recent candle dicts
+            
+        Returns:
+            (updated_state, should_exit, exit_reason)
+        """
+        # Check activation
+        if not state.active:
+            # Should we activate?
+            if current_r >= self.min_r_to_activate:
+                slope_pct, strength = self.calculate_slope(recent_closes, direction)
+                
+                # Check if slope is strong enough
+                if abs(slope_pct) >= self.min_slope_to_activate and strength >= 0.3:
+                    # ACTIVATE momentum trailing!
+                    state.active = True
+                    state.activation_r = current_r
+                    state.slope = slope_pct
+                    state.slope_strength = strength
+                    state.peak_price = current_price
+                    state.bars_in_momentum = 0
+                    
+                    # Calculate initial trail
+                    state.trail_buffer_pct = self.calculate_trail_buffer(strength)
+                    state.trailing_level = self.calculate_trail_level(
+                        current_price, direction, recent_candles, state.trail_buffer_pct
+                    )
+                    
+                    return state, False, None
+            
+            return state, False, None
+        
+        # Already active - UPDATE the trail
+        state.bars_in_momentum += 1
+        
+        # Recalculate slope
+        slope_pct, strength = self.calculate_slope(recent_closes, direction)
+        state.slope = slope_pct
+        state.slope_strength = strength
+        
+        # Update buffer based on current slope
+        state.trail_buffer_pct = self.calculate_trail_buffer(strength)
+        
+        # Update peak price
+        if direction == "long":
+            state.peak_price = max(state.peak_price, current_price)
+        else:
+            state.peak_price = min(state.peak_price, current_price)
+        
+        # Calculate new trail level
+        new_trail = self.calculate_trail_level(
+            current_price, direction, recent_candles, state.trail_buffer_pct
+        )
+        
+        # Only move trail in favorable direction (ratchet effect)
+        if direction == "long":
+            # Trail can only move UP for longs
+            if new_trail > state.trailing_level:
+                state.trailing_level = new_trail
+        else:
+            # Trail can only move DOWN for shorts
+            if new_trail < state.trailing_level:
+                state.trailing_level = new_trail
+        
+        # Store candle body info
+        if recent_candles:
+            last = recent_candles[-1]
+            state.last_candle_body_high = max(last['open'], last['close'])
+            state.last_candle_body_low = min(last['open'], last['close'])
+        
+        # CHECK FOR EXIT - Has momentum broken?
+        if direction == "long" and current_price < state.trailing_level:
+            profit_captured = current_r - state.activation_r if state.activation_r else current_r
+            reason = (
+                f"Momentum trail broken at ${state.trailing_level:,.2f} "
+                f"(captured +{profit_captured:.1f}R of momentum move)"
+            )
+            return state, True, reason
+        
+        elif direction == "short" and current_price > state.trailing_level:
+            profit_captured = current_r - state.activation_r if state.activation_r else current_r
+            reason = (
+                f"Momentum trail broken at ${state.trailing_level:,.2f} "
+                f"(captured +{profit_captured:.1f}R of momentum move)"
+            )
+            return state, True, reason
+        
+        return state, False, None
+    
+    def get_state_summary(self, state: MomentumState, direction: str) -> Dict:
+        """Get summary of current momentum state."""
+        return {
+            'active': state.active,
+            'trailing_level': state.trailing_level,
+            'slope_per_bar_pct': state.slope,
+            'slope_strength': state.slope_strength,
+            'trail_buffer_pct': state.trail_buffer_pct,
+            'bars_in_momentum': state.bars_in_momentum,
+            'peak_price': state.peak_price,
+            'activation_r': state.activation_r,
+            'direction': direction,
+        }
 
 
 # =============================================================================
@@ -369,6 +865,21 @@ class RiskEngine:
             activation_bars=self.config.guarding_activation_bars,
             buffer_pct=self.config.guarding_buffer_pct
         )
+        
+        # Momentum Trailing TP (Living Take-Profit)
+        self.momentum_tp = MomentumTrailingTP(
+            min_r_to_activate=1.0,           # Activate at +1R
+            min_slope_to_activate=0.002,     # 0.2% per bar minimum slope
+            base_buffer_pct=0.5,
+            min_buffer_pct=0.15,             # Very tight trail on strong momentum
+            max_buffer_pct=1.5,
+            slope_lookback=5,
+            trail_wicks=False,               # Trail candle bodies, not wicks
+            body_buffer_pct=0.1,
+        )
+        
+        # Per-position momentum states (keyed by symbol or session)
+        self._momentum_states: Dict[str, MomentumState] = {}
     
     async def calculate_risk_levels(
         self,
@@ -413,11 +924,23 @@ class RiskEngine:
         # Calculate ATR
         atr = self._calculate_atr(primary_df)
         atr_pct = (atr / entry_price) * 100
+        levels.atr_current = atr
+        levels.atr_pct = atr_pct
+        
+        # === NEW: Volatility Regime Detection ===
+        if self.config.enable_volatility_regime:
+            levels.volatility_regime = self._detect_volatility_regime(primary_df, atr).value
         
         # Step 1: Structure Analysis
         if self.structure_detector:
             levels.structure_analysis = self.structure_detector.analyze(primary_df)
             levels.structure_quality = levels.structure_analysis.structure_score
+            
+            # === NEW: Apply staleness penalty ===
+            if self.config.enable_staleness_penalty:
+                levels.structure_quality = self._apply_staleness_penalty(
+                    levels.structure_quality, levels.structure_analysis
+                )
         
         # Step 2: VPVR Analysis
         if self.vpvr_analyzer:
@@ -447,12 +970,18 @@ class RiskEngine:
                 entry_price, direction, price_data
             )
         
-        # Step 8: Position Sizing
+        # Step 8: Position Sizing (with volatility adjustment)
         primary_stop_price = levels.stops[0]['price'] if levels.stops else entry_price - (atr * 2)
         risk_distance = abs(entry_price - primary_stop_price)
         
+        # Apply volatility regime adjustment
+        adjusted_risk_pct = risk_per_trade_pct
+        if levels.volatility_regime == VolatilityRegime.EXTREME.value:
+            adjusted_risk_pct *= self.config.extreme_vol_size_reduction
+            logger.warning(f"EXTREME volatility: Reducing position size by {(1-self.config.extreme_vol_size_reduction)*100:.0f}%")
+        
         levels.position_size, levels.position_size_pct, levels.risk_amount = self._calculate_position_size(
-            account_balance, risk_per_trade_pct, entry_price, risk_distance, atr_pct
+            account_balance, adjusted_risk_pct, entry_price, risk_distance, atr_pct
         )
         
         # Step 9: Risk Metrics
@@ -464,13 +993,169 @@ class RiskEngine:
                 entry_price, levels.stops[0]['price'], levels.targets[-1]['price']
             )
         
+        # === NEW: Calculate breakeven and 1R prices ===
+        if levels.stops:
+            levels.breakeven_price = self._calculate_breakeven_price(entry_price, direction)
+            levels.one_r_price = self._calculate_one_r_price(
+                entry_price, levels.stops[0]['price'], direction
+            )
+        
+        # === NEW: Entry Gate - Block poor R:R trades ===
+        if self.config.enforce_min_rr:
+            if levels.risk_reward_ratio < self.config.min_rr_for_entry:
+                levels.entry_blocked = True
+                levels.block_reason = (
+                    f"R:R of {levels.risk_reward_ratio:.2f} below minimum "
+                    f"{self.config.min_rr_for_entry:.1f}. Find better entry or tighter stop."
+                )
+                logger.warning(f"Entry BLOCKED: {levels.block_reason}")
+        
         return levels
     
-    def update_position(self, levels: RiskLevels, update: PositionUpdate) -> RiskUpdate:
+    def _detect_volatility_regime(self, ohlcv: pd.DataFrame, current_atr: float) -> VolatilityRegime:
+        """
+        Detect current volatility regime by comparing current ATR to historical.
+        
+        Returns regime for position sizing adjustment.
+        """
+        if len(ohlcv) < self.config.volatility_lookback:
+            return VolatilityRegime.NORMAL
+        
+        # Calculate baseline ATR (longer period)
+        baseline_atr = self._calculate_atr(ohlcv, period=self.config.volatility_lookback)
+        
+        if baseline_atr == 0:
+            return VolatilityRegime.NORMAL
+        
+        ratio = current_atr / baseline_atr
+        
+        if ratio < self.config.low_vol_threshold:
+            return VolatilityRegime.LOW
+        elif ratio > self.config.extreme_vol_threshold:
+            return VolatilityRegime.EXTREME
+        elif ratio > self.config.high_vol_threshold:
+            return VolatilityRegime.HIGH
+        else:
+            return VolatilityRegime.NORMAL
+    
+    def _apply_staleness_penalty(
+        self, 
+        base_score: float, 
+        structure: StructureAnalysis
+    ) -> float:
+        """
+        Apply penalty for stale structure and bonus for fresh structure.
+        """
+        adjusted_score = base_score
+        
+        # Check trendlines for staleness
+        if structure.trendlines:
+            avg_staleness = np.mean([t.bars_since_last_touch for t in structure.trendlines])
+            
+            if avg_staleness > self.config.staleness_threshold_bars:
+                # Penalize stale structure
+                penalty = min(
+                    self.config.staleness_max_penalty,
+                    (avg_staleness - self.config.staleness_threshold_bars) / 50
+                )
+                adjusted_score -= penalty
+                logger.debug(f"Structure staleness penalty: -{penalty:.2f}")
+            
+            elif avg_staleness < self.config.freshness_bonus_bars:
+                # Bonus for fresh structure
+                adjusted_score += self.config.freshness_bonus
+                logger.debug(f"Fresh structure bonus: +{self.config.freshness_bonus}")
+        
+        return max(0.0, min(10.0, adjusted_score))
+    
+    def _calculate_breakeven_price(self, entry_price: float, direction: str) -> float:
+        """Calculate breakeven price with small buffer."""
+        buffer = entry_price * (self.config.breakeven_buffer_pct / 100)
+        
+        if direction == "long":
+            return entry_price + buffer  # Slightly above entry
+        else:
+            return entry_price - buffer  # Slightly below entry
+    
+    def _calculate_one_r_price(self, entry_price: float, stop_price: float, direction: str) -> float:
+        """Calculate price at +1R profit."""
+        risk_distance = abs(entry_price - stop_price)
+        
+        if direction == "long":
+            return entry_price + risk_distance
+        else:
+            return entry_price - risk_distance
+    
+    def _detect_divergence(self, ohlcv: pd.DataFrame, direction: str) -> Tuple[bool, Optional[str]]:
+        """
+        Detect price/RSI divergence for early exit signals.
+        
+        For longs: bearish divergence = price making highs, RSI making lows
+        For shorts: bullish divergence = price making lows, RSI making highs
+        """
+        if not self.config.enable_divergence_detection:
+            return False, None
+        
+        if len(ohlcv) < self.config.divergence_lookback:
+            return False, None
+        
+        close = ohlcv['close'].values[-self.config.divergence_lookback:]
+        
+        # Calculate RSI
+        delta = np.diff(close)
+        gains = np.where(delta > 0, delta, 0)
+        losses = np.where(delta < 0, -delta, 0)
+        
+        avg_gain = np.mean(gains[-self.config.rsi_period:])
+        avg_loss = np.mean(losses[-self.config.rsi_period:])
+        
+        if avg_loss == 0:
+            rsi = 100
+        else:
+            rs = avg_gain / avg_loss
+            rsi = 100 - (100 / (1 + rs))
+        
+        # Compare first half vs second half of lookback period
+        mid = len(close) // 2
+        first_half_high = np.max(close[:mid])
+        second_half_high = np.max(close[mid:])
+        first_half_low = np.min(close[:mid])
+        second_half_low = np.min(close[mid:])
+        
+        if direction == "long":
+            # Bearish divergence: price making higher highs, but RSI weakening
+            price_making_highs = second_half_high > first_half_high
+            rsi_weakening = rsi < 50
+            
+            if price_making_highs and rsi_weakening:
+                return True, "bearish"
+        
+        else:  # short
+            # Bullish divergence: price making lower lows, but RSI strengthening
+            price_making_lows = second_half_low < first_half_low
+            rsi_strengthening = rsi > 50
+            
+            if price_making_lows and rsi_strengthening:
+                return True, "bullish"
+        
+        return False, None
+    
+    def update_position(
+        self, 
+        levels: RiskLevels, 
+        update: PositionUpdate,
+        ohlcv: Optional[pd.DataFrame] = None,
+        session_id: Optional[str] = None
+    ) -> RiskUpdate:
         """
         Update risk levels based on current price action.
         
         Call this on each bar to get dynamic stop/target adjustments.
+        
+        FEATURES:
+        - Breakeven stop at +1R
+        - Momentum Trailing TP (aggressive slope-based trailing)
+        - Divergence detection
         """
         result = RiskUpdate(
             updated_stops=list(levels.stops),
@@ -481,18 +1166,137 @@ class RiskEngine:
         entry = levels.entry_price
         current = update.current_price
         
-        # Check targets hit
-        for target in levels.targets:
-            if direction == "long" and current >= target['price']:
+        # Use session_id or symbol as key for momentum state
+        momentum_key = session_id or levels.symbol
+        
+        # === Calculate current R-multiple ===
+        if levels.stops:
+            risk_distance = abs(entry - levels.stops[0]['price'])
+            if risk_distance > 0:
+                if direction == "long":
+                    profit_distance = current - entry
+                else:
+                    profit_distance = entry - current
+                result.current_r_multiple = profit_distance / risk_distance
+        
+        # === Breakeven Stop at +1R ===
+        if self.config.enable_breakeven_stop and result.current_r_multiple >= self.config.breakeven_trigger_r:
+            result.breakeven_hit = True
+            
+            # Move stop to breakeven if not already there
+            current_stop = levels.stops[0]['price'] if levels.stops else None
+            breakeven_price = levels.breakeven_price or self._calculate_breakeven_price(entry, direction)
+            
+            if current_stop and self._is_better_stop(breakeven_price, current_stop, direction):
+                result.stop_moved = True
+                result.moved_to_breakeven = True
+                result.new_stop_price = breakeven_price
+                result.stop_move_reason = f"Moved to breakeven at +{result.current_r_multiple:.1f}R"
+                result.alerts.append(f"📈 Stop moved to BREAKEVEN at ${breakeven_price:,.2f} (+{result.current_r_multiple:.1f}R)")
+                
+                # Update the levels object
+                if levels.stops:
+                    levels.stops[0]['price'] = breakeven_price
+                    levels.stops[0]['reason'] = "Breakeven stop (profit protection)"
+                    levels.stops[0]['type'] = 'breakeven'
+        
+        # === MOMENTUM TRAILING TP (Living Take-Profit) ===
+        if self.config.enable_dynamic_targets and ohlcv is not None and len(ohlcv) >= 5:
+            # Get or create momentum state
+            if momentum_key not in self._momentum_states:
+                self._momentum_states[momentum_key] = MomentumState()
+            
+            momentum_state = self._momentum_states[momentum_key]
+            
+            # Prepare candle data for momentum TP
+            recent_closes = ohlcv['close'].tolist()[-10:]
+            recent_candles = [
+                {
+                    'open': float(row['open']),
+                    'high': float(row['high']),
+                    'low': float(row['low']),
+                    'close': float(row['close']),
+                }
+                for _, row in ohlcv.tail(5).iterrows()
+            ]
+            
+            # Update momentum trailing
+            updated_state, should_exit, exit_reason = self.momentum_tp.update(
+                state=momentum_state,
+                current_price=current,
+                current_r=result.current_r_multiple,
+                direction=direction,
+                recent_closes=recent_closes,
+                recent_candles=recent_candles,
+            )
+            
+            self._momentum_states[momentum_key] = updated_state
+            
+            # Report momentum state
+            if updated_state.active:
+                # Update result with momentum state
+                result.momentum_trailing_active = True
+                result.momentum_trailing_level = updated_state.trailing_level
+                result.momentum_slope_strength = updated_state.slope_strength
+                result.momentum_buffer_pct = updated_state.trail_buffer_pct
+                
+                if not momentum_state.active:
+                    # Just activated
+                    result.alerts.append(
+                        f"🚀 MOMENTUM TRAILING ACTIVATED at +{result.current_r_multiple:.1f}R "
+                        f"(slope: {updated_state.slope:.2f}%/bar, strength: {updated_state.slope_strength:.0%})"
+                    )
+                    result.alerts.append(
+                        f"📍 Trailing at ${updated_state.trailing_level:,.2f} "
+                        f"(buffer: {updated_state.trail_buffer_pct:.1f}%)"
+                    )
+                
+                # Add new dynamic target at trailing level
+                result.new_target_added = True
+                result.new_target_price = updated_state.trailing_level
+            
+            # Check for momentum exit
+            if should_exit and exit_reason:
                 result.exit_signal = True
-                result.exit_reason = f"Target hit: {target['reason']}"
-                result.exit_percentage = target.get('exit_percentage', 100)
-                break
-            elif direction == "short" and current <= target['price']:
-                result.exit_signal = True
-                result.exit_reason = f"Target hit: {target['reason']}"
-                result.exit_percentage = target.get('exit_percentage', 100)
-                break
+                result.exit_reason = exit_reason
+                result.exit_percentage = 100.0  # Full exit on momentum break
+                result.alerts.append(f"🎯 MOMENTUM EXIT: {exit_reason}")
+        
+        # === Divergence Detection ===
+        if ohlcv is not None and self.config.enable_divergence_detection:
+            div_detected, div_type = self._detect_divergence(ohlcv, direction)
+            if div_detected:
+                result.divergence_detected = True
+                result.divergence_type = div_type
+                
+                # Divergence against position = partial exit signal
+                if (direction == "long" and div_type == "bearish") or \
+                   (direction == "short" and div_type == "bullish"):
+                    result.alerts.append(f"⚠️ {div_type.upper()} divergence detected - consider partial exit")
+                    
+                    # Only signal exit if we're in profit and momentum trailing not active
+                    momentum_state = self._momentum_states.get(momentum_key)
+                    if result.current_r_multiple > 0.5 and (not momentum_state or not momentum_state.active):
+                        result.exit_signal = True
+                        result.exit_reason = f"{div_type} divergence - momentum weakening"
+                        result.exit_percentage = 33.0  # Partial exit
+        
+        # Check fixed targets hit (only if momentum trailing not active)
+        momentum_state = self._momentum_states.get(momentum_key)
+        if not (momentum_state and momentum_state.active):
+            for target in levels.targets:
+                if direction == "long" and current >= target['price']:
+                    result.exit_signal = True
+                    result.exit_reason = f"Target hit: {target['reason']}"
+                    result.exit_percentage = target.get('exit_percentage', 100)
+                    result.alerts.append(f"🎯 TARGET HIT at ${target['price']:,.2f}")
+                    break
+                elif direction == "short" and current <= target['price']:
+                    result.exit_signal = True
+                    result.exit_reason = f"Target hit: {target['reason']}"
+                    result.exit_percentage = target.get('exit_percentage', 100)
+                    result.alerts.append(f"🎯 TARGET HIT at ${target['price']:,.2f}")
+                    break
         
         # Check guarding line
         if levels.guarding_line and update.bars_since_entry >= self.config.guarding_activation_bars:
@@ -507,13 +1311,15 @@ class RiskEngine:
                 result.exit_signal = True
                 result.exit_reason = reason
                 result.exit_percentage = 100.0
+                result.alerts.append(f"🛡️ GUARDING LINE BROKEN - {reason}")
         
-        # Trail stop if in profit
-        if update.unrealized_pnl_pct > 0:
+        # Trail stop if in profit (after breakeven)
+        if update.unrealized_pnl_pct > 0 and not result.moved_to_breakeven:
             new_stop = self._trail_stop(direction, entry, current, update, levels.stops)
             if new_stop:
                 result.stop_moved = True
                 result.new_stop_price = new_stop
+                result.stop_move_reason = "Trailing stop adjustment"
         
         # Check structure health
         if update.recent_lows and update.recent_highs:
@@ -524,8 +1330,50 @@ class RiskEngine:
                 result.exit_signal = True
                 result.exit_reason = "Supporting structure broken"
                 result.exit_percentage = 100.0
+                result.alerts.append("🔴 STRUCTURE BROKEN - Exit position")
         
         return result
+    
+    def get_momentum_state(self, session_id: str) -> Optional[Dict]:
+        """Get current momentum trailing state for a session."""
+        state = self._momentum_states.get(session_id)
+        if state:
+            return {
+                'active': state.active,
+                'trailing_level': state.trailing_level,
+                'slope_pct_per_bar': state.slope,
+                'slope_strength': state.slope_strength,
+                'trail_buffer_pct': state.trail_buffer_pct,
+                'bars_in_momentum': state.bars_in_momentum,
+                'peak_price': state.peak_price,
+                'activation_r': state.activation_r,
+            }
+        return None
+    
+    def reset_momentum_state(self, session_id: str):
+        """Reset momentum state for a session (e.g., after exit)."""
+        if session_id in self._momentum_states:
+            del self._momentum_states[session_id]
+    
+    def _is_better_stop(self, new_stop: float, current_stop: float, direction: str) -> bool:
+        """Check if new stop is tighter (better) than current stop."""
+        if direction == "long":
+            return new_stop > current_stop  # Higher stop is better for longs
+        else:
+            return new_stop < current_stop  # Lower stop is better for shorts
+    
+    def _check_dynamic_target(
+        self, 
+        levels: RiskLevels, 
+        current_price: float,
+        current_r: float
+    ) -> Optional[Dict[str, Any]]:
+        """
+        LEGACY: Simple R-based target extension.
+        See MomentumTrailingTP for the new aggressive trailing system.
+        """
+        # This is now handled by MomentumTrailingTP
+        return None
     
     def _determine_orderflow_bias(self, orderflow: OrderFlowAnalysis) -> str:
         """Determine order flow bias."""

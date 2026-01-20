@@ -1244,8 +1244,12 @@
         
         let chart, candleSeries, priceLines = [];
         let guardingLineSeries = null;
+        let primaryStopSeries = null;
+        let secondaryStopSeries = null;
+        let safetyNetSeries = null;
         let volumeProfile = null;
         let lastBarTime = 0;
+        let entryMarker;
         
         const TIMEFRAME_SECONDS = {
             '15m': 900,
@@ -1253,8 +1257,6 @@
             '4h': 14400,
             '1d': 86400,
         };
-        let guardingLineSeries, primaryStopSeries, secondaryStopSeries, safetyNetSeries;
-        let entryMarker;
         let simInterval;
         let chartBars = [];
         let tradeStartTime = 0;
@@ -1397,8 +1399,33 @@
                 crosshairMarkerVisible: false,
             });
             
-            // Volume profile overlay
-            volumeProfile = new VolumeProfileOverlay(container);
+            // Stop line series (for visualization)
+            primaryStopSeries = chart.addLineSeries({
+                color: '#da3633',
+                lineWidth: 2,
+                lineStyle: LightweightCharts.LineStyle.Solid,
+                priceLineVisible: false,
+                lastValueVisible: false,
+                crosshairMarkerVisible: false,
+            });
+            
+            secondaryStopSeries = chart.addLineSeries({
+                color: '#f85149',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                priceLineVisible: false,
+                lastValueVisible: false,
+                crosshairMarkerVisible: false,
+            });
+            
+            safetyNetSeries = chart.addLineSeries({
+                color: '#8b949e',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dotted,
+                priceLineVisible: false,
+                lastValueVisible: false,
+                crosshairMarkerVisible: false,
+            });
             
             new ResizeObserver(() => {
                 chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
@@ -1423,6 +1450,7 @@
             }).sort((a, b) => a.time - b.time);
             
             const unique = candles.filter((c, i, arr) => i === 0 || c.time !== arr[i-1].time);
+            chartBars = unique;
             candleSeries.setData(unique);
             
             // Track last bar time for angled guarding line
