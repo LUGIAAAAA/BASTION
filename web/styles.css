@@ -194,6 +194,89 @@ input:focus, select:focus {
     font-weight: 600;
 }
 
+/* Market Context Section */
+.market-context {
+    background: linear-gradient(135deg, #0A0A0A 0%, #111111 100%);
+    border: 1px solid #2A2A2A;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.market-context h3 {
+    margin-bottom: 16px;
+    font-size: 1.1rem;
+    color: #C0C0C0;
+}
+
+.context-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+.context-item {
+    text-align: center;
+    padding: 12px;
+    background: #000000;
+    border: 1px solid #1A1A1A;
+    border-radius: 4px;
+}
+
+.context-label {
+    display: block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: #666;
+    margin-bottom: 8px;
+    letter-spacing: 0.05em;
+}
+
+.context-value {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #C0C0C0;
+}
+
+.context-value.score-high {
+    color: #00C853;
+}
+
+.context-value.score-medium {
+    color: #FFD700;
+}
+
+.context-value.score-low {
+    color: #DC143C;
+}
+
+.context-value.bias-bullish {
+    color: #00C853;
+}
+
+.context-value.bias-bearish {
+    color: #DC143C;
+}
+
+.context-value.bias-neutral {
+    color: #888;
+}
+
+.level-distance {
+    font-size: 0.8rem;
+    color: #666;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 4px;
+}
+
+.exit-pct {
+    color: #666;
+    font-size: 0.7rem;
+    margin-left: 4px;
+}
+
 .levels-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -257,6 +340,10 @@ input:focus, select:focus {
 
     .form-row {
         grid-template-columns: 1fr;
+    }
+
+    .context-grid {
+        grid-template-columns: repeat(2, 1fr);
     }
 
     .levels-grid {

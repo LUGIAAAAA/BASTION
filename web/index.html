@@ -10,7 +10,7 @@
     <div class="container">
         <header>
             <h1>BASTION</h1>
-            <p class="tagline">Proactive Risk Defense</p>
+            <p class="tagline">Strategy-Agnostic Risk Management</p>
         </header>
 
         <div class="calculator">
@@ -64,7 +64,7 @@
 
             <div id="loading" class="loading" style="display: none;">
                 <div class="spinner"></div>
-                <p>Calculating...</p>
+                <p>Analyzing structure, volume, order flow...</p>
             </div>
 
             <div id="error" class="error" style="display: none;"></div>
@@ -83,6 +83,29 @@
                     <div class="price-item">
                         <span class="label">Current:</span>
                         <span id="currentPrice" class="value"></span>
+                    </div>
+                </div>
+
+                <!-- Market Context Section -->
+                <div class="market-context" id="marketContext">
+                    <h3>📈 MARKET CONTEXT</h3>
+                    <div class="context-grid">
+                        <div class="context-item">
+                            <span class="context-label">Structure</span>
+                            <span class="context-value" id="structureQuality">-</span>
+                        </div>
+                        <div class="context-item">
+                            <span class="context-label">Volume</span>
+                            <span class="context-value" id="volumeScore">-</span>
+                        </div>
+                        <div class="context-item">
+                            <span class="context-label">Order Flow</span>
+                            <span class="context-value" id="orderflowBias">-</span>
+                        </div>
+                        <div class="context-item">
+                            <span class="context-label">MTF Align</span>
+                            <span class="context-value" id="mtfAlignment">-</span>
+                        </div>
                     </div>
                 </div>
 
@@ -109,4 +132,3 @@
     <script src="app.js"></script>
 </body>
 </html>
-

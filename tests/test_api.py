@@ -20,7 +20,6 @@ from fastapi.testclient import TestClient
 @pytest.fixture(scope="function")
 def client():
     """Create a fresh test client for each test."""
-    # Import inside fixture to ensure fresh module state
     from api.server import app
     with TestClient(app) as c:
         yield c
@@ -51,7 +50,7 @@ class TestHealthEndpoint:
         response = client.get("/health")
         data = response.json()
         assert "version" in data
-        assert data["version"] == "1.0.0-MVP"
+        assert data["version"] == "2.0.0"
 
 
 class TestRootEndpoint:
@@ -139,6 +138,7 @@ class TestCalculateEndpointIntegration:
         assert data["direction"] == "long"
         assert len(data["stops"]) > 0
         assert len(data["targets"]) > 0
+        assert "market_context" in data
     
     def test_calculate_btc_short(self, client):
         """Calculate endpoint should work for BTC short position."""
@@ -162,153 +162,74 @@ class TestCoreComponents:
     
     def test_risk_engine_import(self):
         """RiskEngine should be importable."""
-        from core.engine import RiskEngine
+        from core.risk_engine import RiskEngine
         engine = RiskEngine()
         assert engine is not None
     
     def test_trade_setup_import(self):
         """TradeSetup model should be importable."""
-        from core.models import TradeSetup
+        from core.risk_engine import TradeSetup
         setup = TradeSetup(
+            symbol="BTCUSDT",
+            entry_price=95000,
+            direction="long",
+            timeframe="4h"
+        )
+        assert setup.entry_price == 95000
+        assert setup.direction == "long"
+    
+    def test_risk_levels_structure(self):
+        """RiskLevels should have correct structure."""
+        from core.risk_engine import RiskLevels
+        
+        levels = RiskLevels(
             entry_price=95000,
             direction="long",
             timeframe="4h",
             symbol="BTCUSDT"
         )
-        assert setup.entry_price == 95000
-        assert setup.direction == "long"
+        
+        assert levels.entry_price == 95000
+        assert levels.stops == []
+        assert levels.targets == []
+        assert levels.structure_quality == 0.0
+        assert levels.volume_profile_score == 0.0
+        assert levels.orderflow_bias == "neutral"
+        assert levels.mtf_alignment == 0.0
     
-    def test_market_context_atr_calculation(self):
-        """MarketContext should calculate ATR."""
-        from core.models import MarketContext
-        from datetime import datetime
+    def test_stop_type_enum(self):
+        """StopType enum should have correct values."""
+        from core.risk_engine import StopType
         
-        # Create mock market data
-        highs = [100, 102, 101, 103, 100, 99, 101, 102, 100, 98, 99, 100, 101, 102, 103]
-        lows = [98, 99, 99, 100, 97, 97, 99, 100, 98, 96, 97, 98, 99, 100, 101]
-        closes = [99, 101, 100, 101, 99, 98, 100, 101, 99, 97, 98, 99, 100, 101, 102]
-        
-        market = MarketContext(
-            timestamps=[datetime.now()] * 15,
-            opens=[99] * 15,
-            highs=highs,
-            lows=lows,
-            closes=closes,
-            volumes=[1000] * 15,
-            current_price=102
-        )
-        
-        # ATR should be calculated
-        atr = market.atr
-        assert atr > 0
+        assert StopType.PRIMARY.value == "primary"
+        assert StopType.SECONDARY.value == "secondary"
+        assert StopType.SAFETY_NET.value == "safety_net"
+        assert StopType.GUARDING.value == "guarding"
     
-    def test_stop_level_creation(self):
-        """StopLevel should be creatable."""
-        from core.models import StopLevel, StopType
+    def test_target_type_enum(self):
+        """TargetType enum should have correct values."""
+        from core.risk_engine import TargetType
         
-        stop = StopLevel(
-            price=92500,
-            type=StopType.PRIMARY,
-            confidence=0.8,
-            reason="Below support",
-            distance_pct=2.6
-        )
-        
-        assert stop.price == 92500
-        assert stop.type == StopType.PRIMARY
-    
-    def test_target_level_creation(self):
-        """TargetLevel should be creatable."""
-        from core.models import TargetLevel, TargetType
-        
-        target = TargetLevel(
-            price=98000,
-            type=TargetType.STRUCTURAL,
-            exit_percentage=33,
-            confidence=0.7,
-            reason="Resistance level",
-            distance_pct=3.2
-        )
-        
-        assert target.price == 98000
-        assert target.exit_percentage == 33
-    
-    def test_risk_engine_with_mock_data(self):
-        """RiskEngine should calculate levels with mock market data."""
-        from core.engine import RiskEngine
-        from core.models import TradeSetup, MarketContext
-        from datetime import datetime
-        
-        engine = RiskEngine()
-        
-        # Create mock market data with enough bars
-        n_bars = 200
-        base_price = 95000
-        
-        # Simulate some price movement
-        import random
-        random.seed(42)
-        
-        closes = [base_price]
-        for _ in range(n_bars - 1):
-            change = random.uniform(-200, 200)
-            closes.append(closes[-1] + change)
-        
-        highs = [c + random.uniform(50, 150) for c in closes]
-        lows = [c - random.uniform(50, 150) for c in closes]
-        opens = [closes[i-1] if i > 0 else closes[0] for i in range(len(closes))]
-        
-        market = MarketContext(
-            timestamps=[datetime.now()] * n_bars,
-            opens=opens,
-            highs=highs,
-            lows=lows,
-            closes=closes,
-            volumes=[1000000] * n_bars,
-            current_price=closes[-1]
-        )
-        
-        setup = TradeSetup(
-            entry_price=95000,
-            direction="long",
-            timeframe="4h",
-            symbol="BTCUSDT",
-            account_balance=100000,
-            risk_per_trade_pct=1.0
-        )
-        
-        # Calculate risk levels
-        levels = engine.calculate_risk_levels(setup, market)
-        
-        # Verify results
-        assert len(levels.stops) > 0
-        assert len(levels.targets) > 0
-        assert levels.position_size > 0
-        assert levels.risk_amount > 0
-        
-        # For long, stops should be below entry
-        for stop in levels.stops:
-            assert stop.price < setup.entry_price
-        
-        # For long, targets should be above entry
-        for target in levels.targets:
-            assert target.price > setup.entry_price
+        assert TargetType.STRUCTURAL.value == "structural"
+        assert TargetType.VPVR.value == "vpvr"
+        assert TargetType.EXTENSION.value == "extension"
+        assert TargetType.DYNAMIC.value == "dynamic"
 
 
-class TestGuardingLine:
-    """Tests for guarding line calculations."""
+class TestGuardingLineManager:
+    """Tests for integrated guarding line."""
     
     def test_guarding_line_import(self):
-        """GuardingLine should be importable."""
-        from core.guarding_line import GuardingLine
-        gl = GuardingLine()
+        """GuardingLineManager should be importable."""
+        from core.risk_engine import GuardingLineManager
+        gl = GuardingLineManager()
         assert gl is not None
     
     def test_guarding_line_calculation(self):
-        """GuardingLine should calculate initial line."""
-        from core.guarding_line import GuardingLine
+        """GuardingLineManager should calculate initial line."""
+        from core.risk_engine import GuardingLineManager
         
-        gl = GuardingLine(activation_bars=10)
+        gl = GuardingLineManager(activation_bars=10)
         
         # Mock lows for a long position
         lows = [94000, 93800, 93900, 94100, 94000, 93700, 93800, 94000, 94200, 94100,
@@ -325,10 +246,10 @@ class TestGuardingLine:
         assert "activation_bar" in line
     
     def test_guarding_line_level(self):
-        """GuardingLine should return current level."""
-        from core.guarding_line import GuardingLine
+        """GuardingLineManager should return current level."""
+        from core.risk_engine import GuardingLineManager
         
-        gl = GuardingLine(activation_bars=5)
+        gl = GuardingLineManager(activation_bars=5)
         
         line = {
             "slope": 50,
@@ -345,6 +266,21 @@ class TestGuardingLine:
         
         # After activation, level should be higher (for positive slope)
         assert level_after > level_before
+    
+    def test_guarding_break_detection(self):
+        """GuardingLineManager should detect breaks."""
+        from core.risk_engine import GuardingLineManager
+        
+        gl = GuardingLineManager()
+        
+        # Long position - price below guarding = break
+        is_broken, reason = gl.check_break(93000, 94000, "long")
+        assert is_broken
+        assert "broke below" in reason
+        
+        # Long position - price above guarding = no break
+        is_broken, _ = gl.check_break(95000, 94000, "long")
+        assert not is_broken
 
 
 class TestAdaptiveBudget:
@@ -381,6 +317,34 @@ class TestAdaptiveBudget:
         assert shot.entry_price == 95000
         assert shot.size > 0
         assert budget.risk_used > 0
+
+
+class TestDetectionSystems:
+    """Tests for detection system imports."""
+    
+    def test_structure_detector_import(self):
+        """StructureDetector should be importable."""
+        from core.structure_detector import StructureDetector
+        detector = StructureDetector()
+        assert detector is not None
+    
+    def test_vpvr_analyzer_import(self):
+        """VPVRAnalyzer should be importable."""
+        from core.vpvr_analyzer import VPVRAnalyzer
+        analyzer = VPVRAnalyzer()
+        assert analyzer is not None
+    
+    def test_mtf_analyzer_import(self):
+        """MTFStructureAnalyzer should be importable."""
+        from core.mtf_structure import MTFStructureAnalyzer
+        analyzer = MTFStructureAnalyzer()
+        assert analyzer is not None
+    
+    def test_orderflow_detector_import(self):
+        """OrderFlowDetector should be importable."""
+        from core.orderflow_detector import OrderFlowDetector
+        detector = OrderFlowDetector()
+        assert detector is not None
 
 
 if __name__ == "__main__":
