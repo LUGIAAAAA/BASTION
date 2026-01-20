@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BASTION - Dynamic Trade Manager</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .trade-lifecycle {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+            border: 1px solid #0f3460;
+        }
+        
+        .phase-indicator {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .phase {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            border: 2px solid #2d4059;
+            opacity: 0.4;
+            transition: all 0.3s;
+        }
+        
+        .phase.active {
+            opacity: 1;
+            border-color: #00d9ff;
+            background: rgba(0, 217, 255, 0.1);
+        }
+        
+        .phase-name {
+            font-size: 12px;
+            color: #8b92a7;
+            margin-bottom: 4px;
+        }
+        
+        .phase-status {
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+        }
+        
+        .multi-shot-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin: 24px 0;
+        }
+        
+        .shot-card {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 16px;
+            border: 2px solid #2d4059;
+            position: relative;
+        }
+        
+        .shot-card.executed {
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.05);
+        }
+        
+        .shot-card.stopped {
+            border-color: #ff4444;
+            background: rgba(255, 68, 68, 0.05);
+        }
+        
+        .shot-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        
+        .shot-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #00d9ff;
+        }
+        
+        .shot-status {
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: #2d4059;
+        }
+        
+        .shot-detail {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 13px;
+        }
+        
+        .shot-label {
+            color: #8b92a7;
+        }
+        
+        .shot-value {
+            color: #fff;
+            font-weight: 500;
+        }
+        
+        .guarding-line-viz {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+            border: 2px solid #00ff88;
+        }
+        
+        .guarding-line-viz.inactive {
+            border-color: #2d4059;
+            opacity: 0.5;
+        }
+        
+        .guarding-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .guarding-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #00ff88;
+        }
+        
+        .guarding-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #00ff88;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.inactive {
+            background: #666;
+            animation: none;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .guarding-chart {
+            position: relative;
+            height: 200px;
+            background: #0d1117;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .price-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: #00d9ff;
+            left: 0;
+        }
+        
+        .guarding-line {
+            position: absolute;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, rgba(0, 255, 136, 0.3), #00ff88);
+            left: 0;
+            transform-origin: left center;
+        }
+        
+        .exit-triggers {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+        }
+        
+        .trigger-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .trigger-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: #0d1117;
+            border-radius: 8px;
+            border-left: 4px solid #2d4059;
+        }
+        
+        .trigger-item.active {
+            border-left-color: #ff4444;
+            background: rgba(255, 68, 68, 0.05);
+        }
+        
+        .trigger-priority {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #2d4059;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            margin-right: 12px;
+        }
+        
+        .trigger-content {
+            flex: 1;
+        }
+        
+        .trigger-name {
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+        
+        .trigger-desc {
+            font-size: 12px;
+            color: #8b92a7;
+        }
+        
+        .live-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin: 24px 0;
+        }
+        
+        .metric-card {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+        
+        .metric-label {
+            font-size: 12px;
+            color: #8b92a7;
+            margin-bottom: 8px;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: 700;
+        }
+        
+        .metric-value.positive {
+            color: #00ff88;
+        }
+        
+        .metric-value.negative {
+            color: #ff4444;
+        }
+        
+        .partial-exits {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+        }
+        
+        .exit-timeline {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: 16px;
+        }
+        
+        .exit-point {
+            flex: 1;
+            position: relative;
+        }
+        
+        .exit-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #2d4059;
+            border: 3px solid #2d4059;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            margin: 0 auto;
+        }
+        
+        .exit-circle.hit {
+            background: #00ff88;
+            border-color: #00ff88;
+            color: #000;
+        }
+        
+        .exit-connector {
+            height: 3px;
+            background: #2d4059;
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            width: 100%;
+        }
+        
+        .exit-info {
+            text-align: center;
+            margin-top: 12px;
+            font-size: 12px;
+        }
+        
+        .btn-simulate {
+            background: linear-gradient(135deg, #00d9ff 0%, #0099cc 100%);
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 16px;
+        }
+        
+        .btn-simulate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 217, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>BASTION</h1>
+            <p class="tagline">Dynamic Trade Management System</p>
+        </header>
+
+        <!-- Phase 1: Initial Setup -->
+        <div class="trade-lifecycle">
+            <h2>Trade Lifecycle</h2>
+            <div class="phase-indicator">
+                <div class="phase" id="phase1">
+                    <div class="phase-name">PHASE 1</div>
+                    <div class="phase-status">Entry Setup</div>
+                </div>
+                <div class="phase" id="phase2">
+                    <div class="phase-name">PHASE 2</div>
+                    <div class="phase-status">Multi-Shot Scale In</div>
+                </div>
+                <div class="phase" id="phase3">
+                    <div class="phase-name">PHASE 3</div>
+                    <div class="phase-status">Guarding Active</div>
+                </div>
+                <div class="phase" id="phase4">
+                    <div class="phase-name">PHASE 4</div>
+                    <div class="phase-status">Partial Exits</div>
+                </div>
+            </div>
+
+            <div class="calculator">
+                <form id="setupForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Entry Price</label>
+                            <input type="number" id="entry_price" value="94500" step="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Direction</label>
+                            <select id="direction">
+                                <option value="long">LONG</option>
+                                <option value="short">SHORT</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-calculate">Initialize Trade</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Multi-Shot Entry System -->
+        <div class="multi-shot-section" style="display: none;" id="multiShotSection">
+            <h2>Multi-Shot Entry System</h2>
+            <p style="color: #8b92a7; margin-bottom: 16px;">
+                Total Risk Budget: <span style="color: #00d9ff; font-weight: 700;">2% ($2,000)</span> | 
+                Remaining: <span id="remainingBudget" style="color: #00ff88; font-weight: 700;">$2,000</span>
+            </p>
+            
+            <div class="multi-shot-grid">
+                <div class="shot-card" id="shot1">
+                    <div class="shot-header">
+                        <div class="shot-title">SHOT 1</div>
+                        <div class="shot-status">Pending</div>
+                    </div>
+                    <div class="shot-detail">
+                        <span class="shot-label">Risk Allocation:</span>
+                        <span class="shot-value">50% ($1,000)</span>
+                    </div>
+                    <div class="shot-detail">
+                        <span class="shot-label">Entry:</span>
+                        <span class="shot-value" id="shot1Entry">$94,500</span>
+                    </div>
+                    <div class="shot-detail">
+                        <span class="shot-label">Size:</span>
+                        <span class="shot-value" id="shot1Size">0.534 BTC</span>
+                    </div>
+                    <div class="shot-detail">
+                        <span class="shot-label">Stop:</span>
+                        <span class="shot-value">$93,200</span>
+                    </div>
+                </div>
+
+                <div class="shot-card" id="shot2">
+                    <div class="shot-header">
+                        <div class="shot-title">SHOT 2</div>
+                        <div class="shot-status">Waiting</div>
+                    </div>
+                    <div class="shot-detail">
+                        <span class="shot-label">Risk Allocation:</span>
+                        <span class="shot-value">30% ($600)</span>
+                    </div>
+                    <div class="shot-detail">
+                        <span class="shot-label">Trigger:</span>
+                        <span class="shot-value">Support bounce</span>
+                    </div>
+                    <div class="shot-detail">
+                        <span class="shot-label">Target Entry:</span>
+                        <span class="shot-value">$93,850</span>
+                    </div>
+                </div>
+
+                <div class="shot-card" id="shot3">
+                    <div class="shot-header">
+                        <div class="shot-title">SHOT 3</div>
+                        <div class="shot-status">Waiting</div>
+                    </div>
+                    <div class="shot-detail">
+                        <span class="shot-label">Risk Allocation:</span>
+                        <span class="shot-value">20% ($400)</span>
+                    </div>
+                    <div class="shot-detail">
+                        <span class="shot-label">Trigger:</span>
+                        <span class="shot-value">Breakout confirm</span>
+                    </div>
+                    <div class="shot-detail">
+                        <span class="shot-label">Target Entry:</span>
+                        <span class="shot-value">$95,200</span>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn-simulate" onclick="simulateShot2()">Simulate Shot 2 (Support Bounce)</button>
+        </div>
+
+        <!-- Live Metrics -->
+        <div class="live-metrics" style="display: none;" id="liveMetrics">
+            <div class="metric-card">
+                <div class="metric-label">Bars In Trade</div>
+                <div class="metric-value" id="barsInTrade">5</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Unrealized P&L</div>
+                <div class="metric-value positive" id="unrealizedPnl">+$1,450</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Avg Entry</div>
+                <div class="metric-value" id="avgEntry">$94,219</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Current Price</div>
+                <div class="metric-value" id="currentPrice">$95,500</div>
+            </div>
+        </div>
+
+        <!-- Guarding Line Visualization -->
+        <div class="guarding-line-viz inactive" id="guardingViz">
+            <div class="guarding-header">
+                <div>
+                    <div class="guarding-title">🛡️ Guarding Line</div>
+                    <p style="color: #8b92a7; font-size: 13px; margin-top: 4px;">
+                        Activates after 10 bars | Trails upward with trade
+                    </p>
+                </div>
+                <div class="guarding-status">
+                    <div class="status-indicator inactive" id="guardingIndicator"></div>
+                    <span id="guardingStatus">Inactive (5/10 bars)</span>
+                </div>
+            </div>
+            
+            <div class="guarding-chart" id="guardingChart">
+                <div class="price-line" id="priceLineViz" style="top: 40%;"></div>
+                <div class="guarding-line" id="guardingLineViz" style="top: 80%; display: none;"></div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; margin-top: 16px; font-size: 13px;">
+                <div>
+                    <span style="color: #8b92a7;">Guarding Level:</span>
+                    <span style="color: #00ff88; font-weight: 700; margin-left: 8px;" id="guardingLevel">Not Active</span>
+                </div>
+                <div>
+                    <span style="color: #8b92a7;">Buffer:</span>
+                    <span style="color: #00ff88; font-weight: 700; margin-left: 8px;">0.3%</span>
+                </div>
+            </div>
+
+            <button class="btn-simulate" onclick="activateGuarding()">Simulate Bar 11 (Activate Guarding)</button>
+        </div>
+
+        <!-- Partial Exits -->
+        <div class="partial-exits" style="display: none;" id="partialExits">
+            <h2>Partial Exit System</h2>
+            <p style="color: #8b92a7;">Scale out at structural targets + HVN mountains</p>
+            
+            <div class="exit-timeline">
+                <div class="exit-point">
+                    <div class="exit-circle">33%</div>
+                    <div class="exit-connector"></div>
+                    <div class="exit-info">
+                        <div style="font-weight: 600; color: #fff;">Target 1</div>
+                        <div style="color: #8b92a7;">$97,500</div>
+                        <div style="color: #00d9ff;">HVN Mountain</div>
+                    </div>
+                </div>
+                <div class="exit-point">
+                    <div class="exit-circle">33%</div>
+                    <div class="exit-connector"></div>
+                    <div class="exit-info">
+                        <div style="font-weight: 600; color: #fff;">Target 2</div>
+                        <div style="color: #8b92a7;">$99,800</div>
+                        <div style="color: #00d9ff;">Value Area High</div>
+                    </div>
+                </div>
+                <div class="exit-point">
+                    <div class="exit-circle">34%</div>
+                    <div class="exit-info">
+                        <div style="font-weight: 600; color: #fff;">Final</div>
+                        <div style="color: #8b92a7;">Guarding / Signal</div>
+                        <div style="color: #00d9ff;">Dynamic Exit</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Exit Trigger System -->
+        <div class="exit-triggers" style="display: none;" id="exitTriggers">
+            <h2>Exit Priority System</h2>
+            <p style="color: #8b92a7; margin-bottom: 16px;">Exits are prioritized by reason, not just price levels</p>
+            
+            <div class="trigger-list">
+                <div class="trigger-item">
+                    <div class="trigger-priority">1</div>
+                    <div class="trigger-content">
+                        <div class="trigger-name">Opposing MCF Signal</div>
+                        <div class="trigger-desc">Grade 4 resistance forms + LVN below = bearish reversal → Exit ALL immediately</div>
+                    </div>
+                </div>
+                <div class="trigger-item">
+                    <div class="trigger-priority">2</div>
+                    <div class="trigger-content">
+                        <div class="trigger-name">Guarding Line Broken</div>
+                        <div class="trigger-desc">Price closes below trailing guarding line → Exit remaining position</div>
+                    </div>
+                </div>
+                <div class="trigger-item">
+                    <div class="trigger-priority">3</div>
+                    <div class="trigger-content">
+                        <div class="trigger-name">Structural Support Broken</div>
+                        <div class="trigger-desc">Grade 4 trendline violated → Setup invalidated → Exit</div>
+                    </div>
+                </div>
+                <div class="trigger-item">
+                    <div class="trigger-priority">4</div>
+                    <div class="trigger-content">
+                        <div class="trigger-name">Momentum Exhaustion</div>
+                        <div class="trigger-desc">Hidden divergence detected → Take partial profit (33%)</div>
+                    </div>
+                </div>
+                <div class="trigger-item">
+                    <div class="trigger-priority">5</div>
+                    <div class="trigger-content">
+                        <div class="trigger-name">Volume Climax</div>
+                        <div class="trigger-desc">Abnormal volume spike at resistance → Take profits</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPhase = 1;
+        let barsInTrade = 0;
+        let shotsExecuted = 0;
+
+        document.getElementById('setupForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            initializeTrade();
+        });
+
+        function initializeTrade() {
+            currentPhase = 2;
+            updatePhaseIndicator();
+            
+            document.getElementById('multiShotSection').style.display = 'block';
+            document.getElementById('liveMetrics').style.display = 'grid';
+            document.getElementById('guardingViz').style.display = 'block';
+            
+            // Execute Shot 1
+            const shot1Card = document.getElementById('shot1');
+            shot1Card.classList.add('executed');
+            shot1Card.querySelector('.shot-status').textContent = 'Executed';
+            shot1Card.querySelector('.shot-status').style.background = '#00ff88';
+            shot1Card.querySelector('.shot-status').style.color = '#000';
+            
+            shotsExecuted = 1;
+            startBarCounter();
+        }
+
+        function simulateShot2() {
+            const shot2Card = document.getElementById('shot2');
+            shot2Card.classList.add('executed');
+            shot2Card.querySelector('.shot-status').textContent = 'Executed';
+            shot2Card.querySelector('.shot-status').style.background = '#00ff88';
+            shot2Card.querySelector('.shot-status').style.color = '#000';
+            
+            // Update shot 2 details
+            shot2Card.innerHTML += `
+                <div class="shot-detail" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #2d4059;">
+                    <span class="shot-label">Actual Entry:</span>
+                    <span class="shot-value">$93,850</span>
+                </div>
+                <div class="shot-detail">
+                    <span class="shot-label">Size:</span>
+                    <span class="shot-value">0.320 BTC</span>
+                </div>
+            `;
+            
+            // Update avg entry
+            document.getElementById('avgEntry').textContent = '$94,219';
+            document.getElementById('remainingBudget').textContent = '$400';
+            
+            shotsExecuted = 2;
+        }
+
+        function activateGuarding() {
+            currentPhase = 3;
+            updatePhaseIndicator();
+            
+            const guardingViz = document.getElementById('guardingViz');
+            guardingViz.classList.remove('inactive');
+            
+            const indicator = document.getElementById('guardingIndicator');
+            indicator.classList.remove('inactive');
+            
+            document.getElementById('guardingStatus').textContent = 'ACTIVE (11+ bars)';
+            document.getElementById('guardingLevel').textContent = '$96,000';
+            document.getElementById('guardingLineViz').style.display = 'block';
+            
+            // Animate guarding line
+            let guardingTop = 80;
+            setInterval(() => {
+                if (guardingTop > 45) {
+                    guardingTop -= 0.5;
+                    document.getElementById('guardingLineViz').style.top = guardingTop + '%';
+                    
+                    const guardingPrice = 96000 + ((80 - guardingTop) * 30);
+                    document.getElementById('guardingLevel').textContent = '$' + guardingPrice.toLocaleString();
+                }
+            }, 100);
+            
+            document.getElementById('partialExits').style.display = 'block';
+            document.getElementById('exitTriggers').style.display = 'block';
+        }
+
+        function startBarCounter() {
+            setInterval(() => {
+                if (barsInTrade < 15) {
+                    barsInTrade++;
+                    document.getElementById('barsInTrade').textContent = barsInTrade;
+                    
+                    if (barsInTrade >= 10) {
+                        document.getElementById('guardingStatus').textContent = 'Ready (10/10 bars)';
+                        document.getElementById('guardingStatus').style.color = '#00ff88';
+                    } else {
+                        document.getElementById('guardingStatus').textContent = `Inactive (${barsInTrade}/10 bars)`;
+                    }
+                    
+                    // Simulate price movement
+                    const currentPrice = 94500 + (barsInTrade * 100);
+                    document.getElementById('currentPrice').textContent = '$' + currentPrice.toLocaleString();
+                    
+                    const pnl = (currentPrice - 94219) * 0.854;
+                    document.getElementById('unrealizedPnl').textContent = '+$' + pnl.toLocaleString();
+                }
+            }, 2000);
+        }
+
+        function updatePhaseIndicator() {
+            for (let i = 1; i <= 4; i++) {
+                const phase = document.getElementById('phase' + i);
+                if (i <= currentPhase) {
+                    phase.classList.add('active');
+                } else {
+                    phase.classList.remove('active');
+                }
+            }
+        }
+    </script>
+</body>
+</html>
+
