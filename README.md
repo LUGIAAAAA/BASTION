@@ -1,3 +1,4 @@
+<img width="2145" height="1310" alt="Mask group (14)" src="https://github.com/user-attachments/assets/4a9bca8d-2884-4e45-a407-e77ce228c7c3" />
 # BASTION - Risk Management Engine
 
 A professional-grade cryptocurrency risk management system with real-time price feeds, multi-shot entry management, and dynamic stop-loss strategies.
