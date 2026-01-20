@@ -62,6 +62,7 @@ class PriceUpdate:
     ask: float = 0.0
     volume_24h: float = 0.0
     change_24h_pct: float = 0.0
+    source: str = "unknown"
 
 
 @dataclass
@@ -290,9 +291,9 @@ class LiveFeed:
         """Fetch price from Helsinki VM."""
         session = await self._get_session()
         
-        # Try Helsinki VM
+        # Try Helsinki VM /api/price endpoint
         try:
-            url = f"{HELSINKI_SPOT}/api/ticker/{symbol}"
+            url = f"{HELSINKI_SPOT}/api/price/{symbol}"
             async with session.get(url) as resp:
                 if resp.status == 200:
                     data = await resp.json()
@@ -304,27 +305,13 @@ class LiveFeed:
                         ask=float(data.get('askPrice', 0)),
                         volume_24h=float(data.get('volume', data.get('quoteVolume', 0))),
                         change_24h_pct=float(data.get('priceChangePercent', 0)),
+                        source="helsinki_vm",
                     )
                     self._price_cache[symbol] = update
+                    logger.info(f"Helsinki price for {symbol}: ${update.price:,.2f}")
                     return update
         except Exception as e:
-            logger.debug(f"Helsinki ticker failed: {e}")
-        
-        # Try simple price endpoint
-        try:
-            url = f"{HELSINKI_SPOT}/api/price/{symbol}"
-            async with session.get(url) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    update = PriceUpdate(
-                        symbol=symbol,
-                        price=float(data.get('price', data.get('last', 0))),
-                        timestamp=datetime.utcnow(),
-                    )
-                    self._price_cache[symbol] = update
-                    return update
-        except Exception as e:
-            logger.debug(f"Helsinki price failed: {e}")
+            logger.warning(f"Helsinki price failed for {symbol}: {e}")
         
         # Fallback to Binance
         try:
@@ -341,8 +328,10 @@ class LiveFeed:
                         ask=float(data.get('askPrice', 0)),
                         volume_24h=float(data.get('quoteVolume', 0)),
                         change_24h_pct=float(data.get('priceChangePercent', 0)),
+                        source="binance",
                     )
                     self._price_cache[symbol] = update
+                    logger.info(f"Binance price for {symbol}: ${update.price:,.2f}")
                     return update
         except Exception as e:
             logger.error(f"All price sources failed for {symbol}: {e}")
@@ -440,6 +429,9 @@ class LiveFeed:
             async with session.get(url, params=params) as resp:
                 if resp.status == 200:
                     data = await resp.json()
+                    # Helsinki wraps data in {"value": [...]}
+                    if isinstance(data, dict) and 'value' in data:
+                        data = data['value']
                     df = self._parse_klines(data)
                     self._bar_cache.setdefault(symbol, {})[timeframe] = df
                     return df

@@ -164,7 +164,7 @@ async def get_live_price(symbol: str = "BTCUSDT"):
         "volume_24h": update.volume_24h if update else 0,
         "change_24h_pct": update.change_24h_pct if update else 0,
         "timestamp": update.timestamp.isoformat() if update else None,
-        "source": "helsinki_vm" if live_feed.status.value == "connected" else "binance",
+        "source": update.source if update else "unknown",
     }
 
 

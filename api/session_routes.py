@@ -18,6 +18,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 from core.session import (
     SessionManager, SessionState, SessionEntry,
@@ -55,7 +58,9 @@ class CreateSessionRequest(BaseModel):
     direction: str = Field(..., pattern="^(long|short)$", description="Trade direction")
     timeframe: str = Field(default="4h", description="Candle timeframe")
     account_balance: float = Field(default=100000, gt=0, description="Account balance USD")
-    structural_support: float = Field(..., gt=0, description="Grade 3-4 validated support level")
+    structural_support: Optional[float] = Field(None, gt=0, description="Grade 3-4 validated support level")
+    structural_level: Optional[float] = Field(None, gt=0, description="Alias for structural_support")
+    entry_price: Optional[float] = Field(None, gt=0, description="Entry price for first shot")
     targets: List[Dict[str, Any]] = Field(
         default_factory=list,
         description="Target levels [{price, exit_percentage, reason}]"
@@ -87,7 +92,7 @@ class CreateSessionRequest(BaseModel):
 class TakeShotRequest(BaseModel):
     """Request to take a shot (entry)."""
     entry_price: float = Field(..., gt=0, description="Entry price")
-    current_atr: float = Field(..., gt=0, description="Current ATR for buffer calculation")
+    current_atr: Optional[float] = Field(None, description="Current ATR for buffer calculation")
     stop_override: Optional[float] = Field(None, description="Override stop price")
     
     model_config = {
@@ -126,8 +131,9 @@ class UpdateSessionRequest(BaseModel):
 
 class ExecuteExitRequest(BaseModel):
     """Request to execute an exit."""
-    exit_price: float = Field(..., gt=0, description="Exit price")
-    exit_reason: str = Field(..., description="Reason for exit")
+    exit_price: Optional[float] = Field(None, gt=0, description="Exit price (uses current if not provided)")
+    exit_reason: Optional[str] = Field(None, description="Reason for exit")
+    reason: Optional[str] = Field(None, description="Alias for exit_reason")
     exit_percentage: float = Field(default=100, ge=0, le=100, description="% of position to exit")
     
     model_config = {
@@ -231,17 +237,40 @@ async def create_session(request: CreateSessionRequest):
     - Target levels for partial exits
     - Structural stop configuration
     - Auto-subscribes to live price feed
+    - Optionally takes first shot if entry_price provided
     """
     manager = get_manager()
     feed = get_feed()
+    
+    # Accept either structural_support or structural_level
+    structural = request.structural_support or request.structural_level
+    if not structural:
+        raise HTTPException(status_code=400, detail="structural_support or structural_level is required")
+    
+    # Generate default targets if none provided
+    targets = request.targets
+    if not targets and request.entry_price:
+        entry = request.entry_price
+        if request.direction == "long":
+            targets = [
+                {"price": entry * 1.03, "exit_percentage": 33, "reason": "Target 1 (3%)"},
+                {"price": entry * 1.06, "exit_percentage": 33, "reason": "Target 2 (6%)"},
+                {"price": entry * 1.10, "exit_percentage": 34, "reason": "Target 3 (10%)"},
+            ]
+        else:
+            targets = [
+                {"price": entry * 0.97, "exit_percentage": 33, "reason": "Target 1 (3%)"},
+                {"price": entry * 0.94, "exit_percentage": 33, "reason": "Target 2 (6%)"},
+                {"price": entry * 0.90, "exit_percentage": 34, "reason": "Target 3 (10%)"},
+            ]
     
     session = manager.create_session(
         symbol=request.symbol,
         direction=request.direction,
         timeframe=request.timeframe,
         account_balance=request.account_balance,
-        structural_support=request.structural_support,
-        targets=request.targets,
+        structural_support=structural,
+        targets=targets,
         risk_cap_pct=request.risk_cap_pct,
         max_shots=request.max_shots,
         timeout_hours=request.timeout_hours,
@@ -249,7 +278,22 @@ async def create_session(request: CreateSessionRequest):
     
     # Auto-subscribe to live feed for this symbol
     if feed:
-        await feed.subscribe(request.symbol, timeframes=[request.timeframe])
+        try:
+            await feed.subscribe(request.symbol, timeframes=[request.timeframe])
+        except Exception as e:
+            logger.warning(f"Could not subscribe to feed: {e}")
+    
+    # Take first shot if entry price provided
+    if request.entry_price:
+        # Estimate ATR as 2% of entry price if not provided
+        est_atr = request.entry_price * 0.02
+        manager.take_shot(
+            session_id=session.id,
+            entry_price=request.entry_price,
+            current_atr=est_atr,
+        )
+        # Refresh session state
+        session = manager.get_session(session.id)
     
     return SessionResponse(**session.to_dict())
 
@@ -268,10 +312,13 @@ async def take_shot(session_id: str, request: TakeShotRequest):
     """
     manager = get_manager()
     
+    # Estimate ATR if not provided (2% of entry price)
+    atr = request.current_atr or (request.entry_price * 0.02)
+    
     entry = manager.take_shot(
         session_id=session_id,
         entry_price=request.entry_price,
-        current_atr=request.current_atr,
+        current_atr=atr,
         stop_override=request.stop_override,
     )
     
@@ -362,14 +409,26 @@ async def execute_exit(session_id: str, request: ExecuteExitRequest):
     """
     manager = get_manager()
     
+    session = manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Use exit_reason or reason alias
+    reason_str = request.exit_reason or request.reason or "manual_exit"
     try:
-        reason = ExitReason(request.exit_reason)
+        reason = ExitReason(reason_str)
     except ValueError:
         reason = ExitReason.MANUAL
     
+    # Use provided exit_price or current price
+    exit_price = request.exit_price or session.current_price
+    if not exit_price or exit_price <= 0:
+        # Try to get live price
+        exit_price = session.average_entry  # Fallback to entry
+    
     result = manager.execute_exit(
         session_id=session_id,
-        exit_price=request.exit_price,
+        exit_price=exit_price,
         exit_reason=reason,
         exit_percentage=request.exit_percentage,
     )
@@ -428,6 +487,49 @@ async def list_sessions(symbol: str = None, active_only: bool = True):
             sessions = [s for s in sessions if s.symbol == symbol]
     
     return [SessionResponse(**s.to_dict()) for s in sessions]
+
+
+@router.get("/list")
+async def list_sessions_alt(symbol: str = None, active_only: bool = True):
+    """Alternative list endpoint for UI compatibility."""
+    manager = get_manager()
+    
+    if active_only:
+        sessions = manager.get_active_sessions(symbol)
+    else:
+        sessions = list(manager._sessions.values())
+        if symbol:
+            sessions = [s for s in sessions if s.symbol == symbol]
+    
+    return {"sessions": [s.to_dict() for s in sessions]}
+
+
+@router.get("/{session_id}/state")
+async def get_session_state(session_id: str):
+    """Get full session state for UI updates."""
+    manager = get_manager()
+    
+    session = manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    state = session.to_dict()
+    
+    # Add UI-friendly fields
+    state['entry_price'] = session.average_entry
+    state['position_size'] = session.total_size
+    state['risk_amount'] = session.risk_used
+    state['total_risk_budget'] = session.account_balance * (session.total_risk_cap_pct / 100)
+    state['bars_in_trade'] = session.bars_in_trade
+    state['avg_entry'] = session.average_entry
+    state['total_size'] = session.total_size
+    state['unrealized_pnl'] = session.unrealized_pnl
+    state['unrealized_pnl_pct'] = session.unrealized_pnl_pct
+    state['realized_pnl'] = session.realized_pnl
+    state['current_price'] = session.current_price
+    state['guarding_line'] = session.guarding_level
+    
+    return state
 
 
 @router.delete("/{session_id}")

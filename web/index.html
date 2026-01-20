@@ -3,840 +3,1143 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BASTION</title>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>BASTION - MCF Risk Management</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- TradingView Lightweight Charts -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         :root {
             --bg: #0a0a0a;
-            --surface: #111111;
+            --surface: #111;
             --surface-2: #1a1a1a;
             --border: #2a2a2a;
             --text: #e0e0e0;
-            --text-dim: #666;
+            --dim: #666;
             --accent: #dc143c;
-            --accent-glow: rgba(220, 20, 60, 0.3);
             --green: #00c853;
-            --green-dim: rgba(0, 200, 83, 0.15);
             --red: #dc143c;
-            --red-dim: rgba(220, 20, 60, 0.15);
             --gold: #ffd700;
+            --blue: #2196f3;
         }
-
+        
         body {
-            font-family: 'Space Grotesk', sans-serif;
+            font-family: 'Inter', sans-serif;
             background: var(--bg);
             color: var(--text);
             min-height: 100vh;
-            overflow-x: hidden;
         }
-
-        .app {
-            max-width: 480px;
-            margin: 0 auto;
-            padding: 24px 16px;
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 300px 1fr 280px;
             min-height: 100vh;
+            gap: 1px;
+            background: var(--border);
         }
-
-        /* Header */
-        .header {
-            text-align: center;
-            margin-bottom: 32px;
+        
+        .panel {
+            background: var(--bg);
+            padding: 16px;
+            overflow-y: auto;
         }
-
-        .logo {
-            font-size: 2rem;
-            font-weight: 700;
+        
+        .panel-title {
+            font-size: 0.65rem;
+            color: var(--dim);
+            text-transform: uppercase;
             letter-spacing: 0.15em;
-            color: #888;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        /* Left Panel - Setup */
+        .setup-form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-size: 0.7rem;
+            color: var(--dim);
             margin-bottom: 4px;
         }
-
-        .status {
-            font-size: 0.75rem;
-            color: var(--green);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-        }
-
-        .status-dot {
-            width: 6px;
-            height: 6px;
-            background: var(--green);
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
-
-        /* Live Price */
-        .live-price {
+        
+        .form-input {
+            width: 100%;
+            padding: 10px;
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 24px;
-            text-align: center;
-            margin-bottom: 24px;
-        }
-
-        .symbol-select {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            margin-bottom: 16px;
-        }
-
-        .symbol-btn {
-            padding: 8px 16px;
-            background: var(--surface-2);
-            border: 1px solid var(--border);
             border-radius: 6px;
-            color: var(--text-dim);
+            color: var(--text);
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.85rem;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .direction-btns {
+            display: flex;
+            gap: 6px;
+        }
+        
+        .dir-btn {
+            flex: 1;
+            padding: 10px;
+            background: var(--surface);
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            color: var(--dim);
+            font-weight: 600;
+            font-size: 0.8rem;
             cursor: pointer;
             transition: all 0.2s;
         }
-
-        .symbol-btn.active {
+        
+        .dir-btn.long.active {
+            background: rgba(0, 200, 83, 0.15);
+            border-color: var(--green);
+            color: var(--green);
+        }
+        
+        .dir-btn.short.active {
+            background: rgba(220, 20, 60, 0.15);
+            border-color: var(--red);
+            color: var(--red);
+        }
+        
+        .calculate-btn {
+            padding: 14px;
+            background: var(--accent);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            margin-top: 4px;
+        }
+        
+        .calculate-btn:hover {
+            opacity: 0.9;
+        }
+        
+        /* Risk Budget Meter */
+        .budget-section {
+            margin-top: 16px;
+            padding: 12px;
+            background: var(--surface);
+            border-radius: 8px;
+        }
+        
+        .budget-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .budget-title {
+            font-size: 0.7rem;
+            color: var(--dim);
+        }
+        
+        .budget-amount {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--gold);
+        }
+        
+        .budget-bar {
+            height: 20px;
+            background: var(--surface-2);
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+        }
+        
+        .budget-segment {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: white;
+        }
+        
+        .budget-segment.shot1 { background: var(--accent); flex: 50; }
+        .budget-segment.shot2 { background: #ff6b6b; flex: 30; }
+        .budget-segment.shot3 { background: #ffa726; flex: 20; }
+        
+        .budget-legend {
+            display: flex;
+            gap: 8px;
+            margin-top: 6px;
+            font-size: 0.65rem;
+            color: var(--dim);
+        }
+        
+        /* Shots Table */
+        .shots-table {
+            width: 100%;
+            font-size: 0.75rem;
+            margin-top: 12px;
+        }
+        
+        .shots-table th {
+            text-align: left;
+            padding: 6px 4px;
+            color: var(--dim);
+            font-weight: 500;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+        }
+        
+        .shots-table td {
+            padding: 6px 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .shot-status {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 4px;
+        }
+        
+        .shot-status.pending { background: var(--dim); }
+        .shot-status.active { background: var(--green); }
+        
+        /* Center Panel - Chart */
+        .center-panel {
+            display: flex;
+            flex-direction: column;
+            background: var(--bg);
+        }
+        
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .symbol-price {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+        }
+        
+        .symbol {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+        
+        .live-price {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+        
+        .live-price.up { color: var(--green); }
+        .live-price.down { color: var(--red); }
+        
+        .timeframe-btns {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .tf-btn {
+            padding: 6px 12px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--dim);
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+        
+        .tf-btn.active {
             background: var(--accent);
             border-color: var(--accent);
             color: white;
         }
-
-        .symbol-btn:hover:not(.active) {
-            border-color: var(--accent);
-            color: var(--text);
-        }
-
-        .price-display {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
-
-        .price-change {
-            font-size: 0.9rem;
+        
+        .phase-indicator {
             display: flex;
             align-items: center;
-            justify-content: center;
             gap: 8px;
         }
-
-        .price-change.up { color: var(--green); }
-        .price-change.down { color: var(--red); }
-
-        /* Direction Toggle */
-        .direction-toggle {
-            display: flex;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            overflow: hidden;
-            margin-bottom: 24px;
-        }
-
-        .direction-btn {
-            flex: 1;
-            padding: 20px;
-            background: transparent;
-            border: none;
-            color: var(--text-dim);
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 1.1rem;
+        
+        .phase-badge {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.7rem;
             font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
         }
-
-        .direction-btn.long.active {
-            background: var(--green-dim);
+        
+        .phase-badge.phase1 {
+            background: rgba(255, 215, 0, 0.2);
+            color: var(--gold);
+        }
+        
+        .phase-badge.phase2 {
+            background: rgba(0, 200, 83, 0.2);
             color: var(--green);
         }
-
-        .direction-btn.short.active {
-            background: var(--red-dim);
-            color: var(--red);
-        }
-
-        /* Quick Settings */
-        .settings {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-
-        .setting-group {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 16px;
-        }
-
-        .setting-label {
-            font-size: 0.7rem;
-            color: var(--text-dim);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            margin-bottom: 8px;
-        }
-
-        .setting-input {
-            width: 100%;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 10px;
-            color: var(--text);
+        
+        .bar-count {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 1rem;
+            font-size: 0.8rem;
+            color: var(--dim);
         }
-
-        .setting-input:focus {
-            outline: none;
-            border-color: var(--accent);
-        }
-
-        /* Calculate Button */
-        .calculate-btn {
-            width: 100%;
-            padding: 20px;
-            background: linear-gradient(135deg, var(--accent) 0%, #8b0000 100%);
-            border: none;
-            border-radius: 12px;
-            color: white;
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 1.2rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 4px 24px var(--accent-glow);
-        }
-
-        .calculate-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 32px var(--accent-glow);
-        }
-
-        .calculate-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        /* Results */
-        .results {
-            margin-top: 32px;
-            display: none;
-        }
-
-        .results.show {
-            display: block;
-            animation: slideUp 0.3s ease-out;
-        }
-
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Price Ladder */
-        .price-ladder {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 16px;
-        }
-
-        .ladder-title {
-            font-size: 0.75rem;
-            color: var(--text-dim);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            margin-bottom: 16px;
-            text-align: center;
-        }
-
-        .ladder-levels {
+        
+        /* Chart Container */
+        .chart-container {
+            flex: 1;
             position: relative;
+            min-height: 500px;
         }
-
-        .ladder-line {
+        
+        #tradingChart {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Chart Legend */
+        .chart-legend {
             position: absolute;
-            left: 50%;
-            top: 0;
-            bottom: 0;
-            width: 2px;
-            background: linear-gradient(to bottom, var(--green), var(--text-dim), var(--red));
-            transform: translateX(-50%);
+            top: 12px;
+            left: 12px;
+            background: rgba(17, 17, 17, 0.9);
+            padding: 10px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            z-index: 10;
         }
-
-        .ladder-level {
+        
+        .legend-item {
             display: flex;
             align-items: center;
-            padding: 12px 0;
-            position: relative;
-        }
-
-        .ladder-level.target {
-            justify-content: flex-start;
-        }
-
-        .ladder-level.entry {
-            justify-content: center;
-        }
-
-        .ladder-level.stop {
-            justify-content: flex-end;
-        }
-
-        .level-box {
-            background: var(--surface-2);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 12px 16px;
-            min-width: 140px;
-        }
-
-        .level-box.target {
-            border-color: var(--green);
-            background: var(--green-dim);
-        }
-
-        .level-box.entry {
-            border-color: var(--gold);
-            background: rgba(255, 215, 0, 0.1);
-        }
-
-        .level-box.stop {
-            border-color: var(--red);
-            background: var(--red-dim);
-        }
-
-        .level-type {
+            gap: 8px;
             font-size: 0.7rem;
-            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+        
+        .legend-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .legend-line {
+            width: 20px;
+            height: 2px;
+        }
+        
+        .legend-line.entry { background: var(--gold); }
+        .legend-line.structural { background: var(--red); }
+        .legend-line.guarding { background: var(--blue); border-style: dashed; }
+        .legend-line.target { background: var(--green); }
+        .legend-line.safety { background: #ff5722; }
+        
+        /* Right Panel - Info */
+        .info-section {
+            background: var(--surface);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .info-title {
+            font-size: 0.65rem;
+            color: var(--dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 10px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        
+        .info-item {
+            text-align: center;
+            padding: 10px 8px;
+            background: var(--bg);
+            border-radius: 6px;
+        }
+        
+        .info-label {
+            font-size: 0.6rem;
+            color: var(--dim);
             text-transform: uppercase;
             margin-bottom: 4px;
         }
-
-        .level-price {
+        
+        .info-value {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 1rem;
+            font-size: 0.9rem;
             font-weight: 600;
         }
-
-        .level-box.target .level-price { color: var(--green); }
-        .level-box.entry .level-price { color: var(--gold); }
-        .level-box.stop .level-price { color: var(--red); }
-
-        .level-meta {
-            font-size: 0.75rem;
-            color: var(--text-dim);
-            margin-top: 4px;
+        
+        .info-value.green { color: var(--green); }
+        .info-value.gold { color: var(--gold); }
+        .info-value.red { color: var(--red); }
+        
+        /* 3-Tier Stop Visual */
+        .stops-visual {
+            position: relative;
+            padding-left: 16px;
         }
-
-        /* Position Card */
-        .position-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 16px;
+        
+        .stops-line {
+            position: absolute;
+            left: 6px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, var(--red), #ff5722);
+            border-radius: 2px;
         }
-
-        .position-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-        }
-
-        .position-item {
-            text-align: center;
-        }
-
-        .position-label {
-            font-size: 0.7rem;
-            color: var(--text-dim);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 8px;
-        }
-
-        .position-value {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 1.1rem;
-            font-weight: 600;
-        }
-
-        .position-value.highlight {
-            color: var(--gold);
-        }
-
-        /* Context Scores */
-        .context-scores {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-            margin-bottom: 16px;
-        }
-
-        .context-score {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 12px 8px;
-            text-align: center;
-        }
-
-        .score-label {
-            font-size: 0.6rem;
-            color: var(--text-dim);
-            text-transform: uppercase;
+        
+        .stop-tier {
+            padding: 8px 0 8px 12px;
             margin-bottom: 6px;
         }
-
-        .score-value {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 1rem;
+        
+        .stop-tier.active {
+            background: rgba(220, 20, 60, 0.1);
+            border-radius: 0 6px 6px 0;
+        }
+        
+        .tier-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2px;
+        }
+        
+        .tier-name {
+            font-size: 0.75rem;
             font-weight: 600;
         }
-
-        .score-value.high { color: var(--green); }
-        .score-value.mid { color: var(--gold); }
-        .score-value.low { color: var(--red); }
-
-        /* Copy Button */
-        .copy-btn {
-            width: 100%;
-            padding: 16px;
-            background: var(--surface-2);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text);
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: all 0.2s;
+        
+        .tier-price {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
         }
-
-        .copy-btn:hover {
+        
+        .tier-desc {
+            font-size: 0.6rem;
+            color: var(--dim);
+        }
+        
+        .tier-name.structural { color: var(--red); }
+        .tier-name.guarding { color: var(--blue); }
+        .tier-name.safety { color: #ff5722; }
+        
+        /* Exit Priority */
+        .exit-list {
+            list-style: none;
+        }
+        
+        .exit-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.7rem;
+        }
+        
+        .exit-item:last-child {
+            border-bottom: none;
+        }
+        
+        .exit-num {
+            width: 16px;
+            height: 16px;
+            background: var(--surface-2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            font-weight: 600;
+        }
+        
+        .exit-text {
+            flex: 1;
+        }
+        
+        .exit-action {
+            font-size: 0.6rem;
+            color: var(--dim);
+        }
+        
+        /* Market Context */
+        .context-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        
+        .context-item {
+            text-align: center;
+            padding: 8px;
+            background: var(--bg);
+            border-radius: 6px;
+        }
+        
+        .context-label {
+            font-size: 0.55rem;
+            color: var(--dim);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        
+        .context-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        /* Session Link */
+        .session-link {
+            display: block;
+            text-align: center;
+            padding: 12px;
             background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 0.8rem;
+            margin-top: 12px;
+        }
+        
+        .session-link:hover {
             border-color: var(--accent);
         }
-
-        /* Loading */
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 40px;
-        }
-
-        .loading.show {
-            display: block;
-        }
-
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid var(--border);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 16px;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Error */
-        .error {
-            display: none;
-            background: var(--red-dim);
-            border: 1px solid var(--red);
-            border-radius: 8px;
-            padding: 16px;
-            margin-top: 16px;
-            color: var(--red);
-            text-align: center;
-        }
-
-        .error.show {
-            display: block;
-        }
-
-        /* Mobile */
-        @media (max-width: 480px) {
-            .price-display {
-                font-size: 2rem;
+        
+        /* Responsive */
+        @media (max-width: 1100px) {
+            .dashboard {
+                grid-template-columns: 260px 1fr 240px;
             }
-            .context-scores {
-                grid-template-columns: repeat(2, 1fr);
+        }
+        
+        @media (max-width: 900px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            .panel {
+                border-bottom: 1px solid var(--border);
+            }
+            .chart-container {
+                min-height: 400px;
             }
         }
     </style>
 </head>
 <body>
-    <div class="app">
-        <header class="header">
-            <div class="logo">BASTION</div>
-            <div class="status">
-                <span class="status-dot"></span>
-                <span id="statusText">Connecting...</span>
-            </div>
-        </header>
-
-        <!-- Live Price -->
-        <div class="live-price">
-            <div class="symbol-select">
-                <button class="symbol-btn active" data-symbol="BTCUSDT">BTC</button>
-                <button class="symbol-btn" data-symbol="ETHUSDT">ETH</button>
-                <button class="symbol-btn" data-symbol="SOLUSDT">SOL</button>
-            </div>
-            <div class="price-display" id="priceDisplay">$--,---</div>
-            <div class="price-change" id="priceChange">
-                <span>Loading...</span>
-            </div>
-        </div>
-
-        <!-- Direction Toggle -->
-        <div class="direction-toggle">
-            <button class="direction-btn long active" data-dir="long">LONG</button>
-            <button class="direction-btn short" data-dir="short">SHORT</button>
-        </div>
-
-        <!-- Quick Settings -->
-        <div class="settings">
-            <div class="setting-group">
-                <div class="setting-label">Account Balance</div>
-                <input type="number" class="setting-input" id="accountBalance" value="100000" step="1000">
-            </div>
-            <div class="setting-group">
-                <div class="setting-label">Risk %</div>
-                <input type="number" class="setting-input" id="riskPct" value="1.0" step="0.1" min="0.1" max="5">
-            </div>
-        </div>
-
-        <!-- Calculate Button -->
-        <button class="calculate-btn" id="calculateBtn" onclick="calculate()">
-            Calculate Risk Levels
-        </button>
-
-        <!-- Loading -->
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <div>Analyzing market structure...</div>
-        </div>
-
-        <!-- Error -->
-        <div class="error" id="error"></div>
-
-        <!-- Results -->
-        <div class="results" id="results">
-            <!-- Context Scores -->
-            <div class="context-scores">
-                <div class="context-score">
-                    <div class="score-label">Structure</div>
-                    <div class="score-value" id="scoreStructure">-</div>
+    <div class="dashboard">
+        <!-- Left Panel: Setup -->
+        <div class="panel">
+            <div class="panel-title">Trade Setup</div>
+            
+            <div class="setup-form">
+                <div class="form-group">
+                    <label>Symbol</label>
+                    <select class="form-input" id="symbol" onchange="symbolChanged()">
+                        <option value="BTCUSDT">BTC/USDT</option>
+                        <option value="ETHUSDT">ETH/USDT</option>
+                        <option value="SOLUSDT">SOL/USDT</option>
+                    </select>
                 </div>
-                <div class="context-score">
-                    <div class="score-label">Volume</div>
-                    <div class="score-value" id="scoreVolume">-</div>
-                </div>
-                <div class="context-score">
-                    <div class="score-label">Flow</div>
-                    <div class="score-value" id="scoreFlow">-</div>
-                </div>
-                <div class="context-score">
-                    <div class="score-label">MTF</div>
-                    <div class="score-value" id="scoreMTF">-</div>
-                </div>
-            </div>
-
-            <!-- Price Ladder -->
-            <div class="price-ladder">
-                <div class="ladder-title">Price Levels</div>
-                <div class="ladder-levels" id="ladderLevels">
-                    <!-- Filled by JS -->
-                </div>
-            </div>
-
-            <!-- Position Card -->
-            <div class="position-card">
-                <div class="position-grid">
-                    <div class="position-item">
-                        <div class="position-label">Size</div>
-                        <div class="position-value" id="posSize">-</div>
-                    </div>
-                    <div class="position-item">
-                        <div class="position-label">Risk</div>
-                        <div class="position-value highlight" id="posRisk">-</div>
-                    </div>
-                    <div class="position-item">
-                        <div class="position-label">R:R</div>
-                        <div class="position-value" id="posRR">-</div>
+                
+                <div class="form-group">
+                    <label>Direction</label>
+                    <div class="direction-btns">
+                        <button class="dir-btn long active" onclick="setDir('long')">LONG</button>
+                        <button class="dir-btn short" onclick="setDir('short')">SHORT</button>
                     </div>
                 </div>
+                
+                <div class="form-group">
+                    <label>Structural Support (Grade 3-4)</label>
+                    <input type="number" class="form-input" id="support" placeholder="e.g. 93200">
+                </div>
+                
+                <div class="form-group">
+                    <label>Account Balance</label>
+                    <input type="number" class="form-input" id="account" value="100000">
+                </div>
+                
+                <div class="form-group">
+                    <label>Risk Cap %</label>
+                    <input type="number" class="form-input" id="riskCap" value="2.0" step="0.1">
+                </div>
+                
+                <button class="calculate-btn" onclick="analyze()">Analyze Setup</button>
             </div>
-
-            <!-- Copy Button -->
-            <button class="copy-btn" onclick="copyLevels()">
-                Copy Trade Plan
-            </button>
+            
+            <!-- Risk Budget Meter -->
+            <div class="budget-section">
+                <div class="budget-header">
+                    <span class="budget-title">Risk Budget</span>
+                    <span class="budget-amount" id="budgetTotal">$2,000</span>
+                </div>
+                <div class="budget-bar">
+                    <div class="budget-segment shot1">50%</div>
+                    <div class="budget-segment shot2">30%</div>
+                    <div class="budget-segment shot3">20%</div>
+                </div>
+                <div class="budget-legend">
+                    <span>Shot 1: $1,000</span>
+                    <span>Shot 2: $600</span>
+                    <span>Shot 3: $400</span>
+                </div>
+            </div>
+            
+            <!-- Multi-Shot Table -->
+            <table class="shots-table">
+                <thead>
+                    <tr>
+                        <th>Shot</th>
+                        <th>Entry</th>
+                        <th>Size</th>
+                        <th>Risk</th>
+                    </tr>
+                </thead>
+                <tbody id="shotsTable">
+                    <tr>
+                        <td><span class="shot-status pending"></span>1</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>$1,000</td>
+                    </tr>
+                    <tr>
+                        <td><span class="shot-status pending"></span>2</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>$600</td>
+                    </tr>
+                    <tr>
+                        <td><span class="shot-status pending"></span>3</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>$400</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <a href="trade-manager.html" class="session-link" style="background: linear-gradient(135deg, rgba(0, 217, 255, 0.1), rgba(0, 255, 136, 0.05)); border-color: #00d9ff;">🛡️ Open Dynamic Trade Manager →</a>
+            
+            <a href="session.html" class="session-link">Session Tracker →</a>
+        </div>
+        
+        <!-- Center Panel: Chart -->
+        <div class="panel center-panel">
+            <div class="chart-header">
+                <div class="symbol-price">
+                    <span class="symbol" id="displaySymbol">BTCUSDT</span>
+                    <span class="live-price" id="livePrice">$--,---</span>
+                </div>
+                
+                <div class="timeframe-btns">
+                    <button class="tf-btn" data-tf="15m">15m</button>
+                    <button class="tf-btn" data-tf="1h">1H</button>
+                    <button class="tf-btn active" data-tf="4h">4H</button>
+                    <button class="tf-btn" data-tf="1d">1D</button>
+                </div>
+                
+                <div class="phase-indicator">
+                    <span class="phase-badge phase1" id="phaseBadge">Phase 1</span>
+                    <span class="bar-count">Bar <span id="barCount">0</span>/10</span>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <div id="tradingChart"></div>
+                
+                <div class="chart-legend">
+                    <div class="legend-item">
+                        <div class="legend-line entry"></div>
+                        <span>Entry Zone</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-line structural"></div>
+                        <span>Structural Stop</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-line guarding" style="border-top: 2px dashed #2196f3; height: 0;"></div>
+                        <span>Guarding Line</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-line target"></div>
+                        <span>Targets</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-line safety"></div>
+                        <span>Safety Net (5%)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Panel: Trade Info -->
+        <div class="panel">
+            <div class="panel-title">Position Summary</div>
+            
+            <div class="info-section">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Avg Entry</div>
+                        <div class="info-value" id="avgEntry">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Total Size</div>
+                        <div class="info-value" id="totalSize">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Risk Used</div>
+                        <div class="info-value gold" id="riskUsed">$0</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">R:R Ratio</div>
+                        <div class="info-value green" id="rrRatio">-</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 3-Tier Stop System -->
+            <div class="info-section">
+                <div class="info-title">3-Tier Stop System</div>
+                <div class="stops-visual">
+                    <div class="stops-line"></div>
+                    
+                    <div class="stop-tier active">
+                        <div class="tier-header">
+                            <span class="tier-name structural">1. Structural</span>
+                            <span class="tier-price" id="structuralPrice">-</span>
+                        </div>
+                        <div class="tier-desc">Grade 3-4 + 20% ATR buffer</div>
+                    </div>
+                    
+                    <div class="stop-tier">
+                        <div class="tier-header">
+                            <span class="tier-name guarding">2. Guarding</span>
+                            <span class="tier-price" id="guardingPrice">Bar 11+</span>
+                        </div>
+                        <div class="tier-desc">Trails swing lows • Never down</div>
+                    </div>
+                    
+                    <div class="stop-tier">
+                        <div class="tier-header">
+                            <span class="tier-name safety">3. Safety Net</span>
+                            <span class="tier-price" id="safetyPrice">-</span>
+                        </div>
+                        <div class="tier-desc">5% max loss • Emergency</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Exit Priority -->
+            <div class="info-section">
+                <div class="info-title">Exit Priority</div>
+                <ul class="exit-list">
+                    <li class="exit-item">
+                        <span class="exit-num">1</span>
+                        <span class="exit-text">Opposite MCF signal</span>
+                        <span class="exit-action">100%</span>
+                    </li>
+                    <li class="exit-item">
+                        <span class="exit-num">2</span>
+                        <span class="exit-text">Guarding broken</span>
+                        <span class="exit-action">100%</span>
+                    </li>
+                    <li class="exit-item">
+                        <span class="exit-num">3</span>
+                        <span class="exit-text">Structure broken</span>
+                        <span class="exit-action">100%</span>
+                    </li>
+                    <li class="exit-item">
+                        <span class="exit-num">4</span>
+                        <span class="exit-text">Momentum exhaust</span>
+                        <span class="exit-action">33%</span>
+                    </li>
+                    <li class="exit-item">
+                        <span class="exit-num">5</span>
+                        <span class="exit-text">Volume climax</span>
+                        <span class="exit-action">TP</span>
+                    </li>
+                </ul>
+            </div>
+            
+            <!-- Market Context -->
+            <div class="info-section">
+                <div class="info-title">Market Context</div>
+                <div class="context-grid">
+                    <div class="context-item">
+                        <div class="context-label">Structure</div>
+                        <div class="context-value" id="ctxStructure">-</div>
+                    </div>
+                    <div class="context-item">
+                        <div class="context-label">Volume</div>
+                        <div class="context-value" id="ctxVolume">-</div>
+                    </div>
+                    <div class="context-item">
+                        <div class="context-label">Order Flow</div>
+                        <div class="context-value" id="ctxFlow">-</div>
+                    </div>
+                    <div class="context-item">
+                        <div class="context-label">MTF Align</div>
+                        <div class="context-value" id="ctxMTF">-</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-
+    
     <script>
         const API = 'http://localhost:8001';
-        let currentSymbol = 'BTCUSDT';
-        let currentDirection = 'long';
-        let currentPrice = 0;
+        let direction = 'long';
         let currentData = null;
-        let priceInterval = null;
-
-        // Init
-        document.addEventListener('DOMContentLoaded', () => {
-            initSymbolButtons();
-            initDirectionButtons();
-            startPriceFeed();
+        let chart = null;
+        let candleSeries = null;
+        let currentTimeframe = '4h';
+        let priceLines = [];
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            initChart();
+            await loadChartData();
+            updateBudgetDisplay();
+            setInterval(updatePrice, 5000);
+            
+            // Timeframe buttons
+            document.querySelectorAll('.tf-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentTimeframe = btn.dataset.tf;
+                    await loadChartData();
+                });
+            });
         });
-
-        function initSymbolButtons() {
-            document.querySelectorAll('.symbol-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    document.querySelectorAll('.symbol-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    currentSymbol = btn.dataset.symbol;
-                    fetchPrice();
-                });
+        
+        function initChart() {
+            const container = document.getElementById('tradingChart');
+            
+            chart = LightweightCharts.createChart(container, {
+                layout: {
+                    background: { type: 'solid', color: '#0a0a0a' },
+                    textColor: '#666',
+                },
+                grid: {
+                    vertLines: { color: '#1a1a1a' },
+                    horzLines: { color: '#1a1a1a' },
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                },
+                rightPriceScale: {
+                    borderColor: '#2a2a2a',
+                    scaleMargins: { top: 0.1, bottom: 0.1 },
+                },
+                timeScale: {
+                    borderColor: '#2a2a2a',
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
             });
-        }
-
-        function initDirectionButtons() {
-            document.querySelectorAll('.direction-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    document.querySelectorAll('.direction-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    currentDirection = btn.dataset.dir;
-                });
+            
+            candleSeries = chart.addCandlestickSeries({
+                upColor: '#00c853',
+                downColor: '#dc143c',
+                borderUpColor: '#00c853',
+                borderDownColor: '#dc143c',
+                wickUpColor: '#00c853',
+                wickDownColor: '#dc143c',
             });
+            
+            // Handle resize
+            new ResizeObserver(() => {
+                chart.applyOptions({ 
+                    width: container.clientWidth,
+                    height: container.clientHeight 
+                });
+            }).observe(container);
         }
-
-        function startPriceFeed() {
-            fetchPrice();
-            priceInterval = setInterval(fetchPrice, 3000);
-        }
-
-        async function fetchPrice() {
+        
+        async function loadChartData() {
             try {
-                const res = await fetch(`${API}/price/${currentSymbol}`);
-                const data = await res.json();
+                const symbol = document.getElementById('symbol').value;
+                console.log(`Loading chart data for ${symbol} ${currentTimeframe}`);
                 
-                if (data.price > 0) {
-                    currentPrice = data.price;
-                    document.getElementById('priceDisplay').textContent = formatPrice(data.price);
-                    
-                    const changeEl = document.getElementById('priceChange');
-                    const changeVal = data.change_24h_pct || 0;
-                    changeEl.innerHTML = `
-                        <span>${changeVal >= 0 ? '+' : ''}${changeVal.toFixed(2)}%</span>
-                        <span style="color: var(--text-dim)">24h</span>
-                    `;
-                    changeEl.className = `price-change ${changeVal >= 0 ? 'up' : 'down'}`;
-                    
-                    document.getElementById('statusText').textContent = 'Live';
-                } else {
-                    // Fallback - fetch from calculate to get current_price
-                    const calcRes = await fetch(`${API}/calculate`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            symbol: currentSymbol,
-                            entry_price: 100000,
-                            direction: 'long',
-                            timeframe: '4h',
-                            account_balance: 100000
-                        })
+                const res = await fetch(`${API}/bars/${symbol}?timeframe=${currentTimeframe}&limit=200`);
+                
+                if (!res.ok) {
+                    console.error('Failed to load bars:', res.status);
+                    return;
+                }
+                
+                const data = await res.json();
+                console.log(`Received ${data.bars?.length || 0} bars`);
+                
+                if (data.bars && data.bars.length > 0) {
+                    const candles = data.bars.map(bar => {
+                        // Handle both Unix ms and ISO string timestamps
+                        let time;
+                        if (typeof bar.timestamp === 'string') {
+                            time = Math.floor(new Date(bar.timestamp).getTime() / 1000);
+                        } else if (bar.timestamp > 1e12) {
+                            // Milliseconds
+                            time = Math.floor(bar.timestamp / 1000);
+                        } else {
+                            // Already seconds
+                            time = bar.timestamp;
+                        }
+                        return {
+                            time,
+                            open: parseFloat(bar.open),
+                            high: parseFloat(bar.high),
+                            low: parseFloat(bar.low),
+                            close: parseFloat(bar.close),
+                        };
                     });
-                    const calcData = await calcRes.json();
-                    if (calcData.current_price) {
-                        currentPrice = calcData.current_price;
-                        document.getElementById('priceDisplay').textContent = formatPrice(calcData.current_price);
-                        document.getElementById('statusText').textContent = 'Live';
+                    
+                    // Sort by time ascending (required by Lightweight Charts)
+                    candles.sort((a, b) => a.time - b.time);
+                    
+                    // Remove duplicates
+                    const uniqueCandles = candles.filter((c, i, arr) => 
+                        i === 0 || c.time !== arr[i-1].time
+                    );
+                    
+                    console.log(`Setting ${uniqueCandles.length} candles, first: ${new Date(uniqueCandles[0].time * 1000).toISOString()}, last: ${new Date(uniqueCandles[uniqueCandles.length-1].time * 1000).toISOString()}`);
+                    
+                    candleSeries.setData(uniqueCandles);
+                    
+                    // Update live price
+                    const lastCandle = uniqueCandles[uniqueCandles.length - 1];
+                    updatePriceDisplay(lastCandle.close);
+                    
+                    // Auto-fill support if empty
+                    const supportInput = document.getElementById('support');
+                    if (!supportInput.value) {
+                        const lows = uniqueCandles.slice(-20).map(c => c.low);
+                        const recentLow = Math.min(...lows);
+                        supportInput.value = Math.round(recentLow * 0.99);
                     }
+                    
+                    chart.timeScale().fitContent();
                 }
             } catch (e) {
-                console.error('Price fetch error:', e);
-                document.getElementById('statusText').textContent = 'Reconnecting...';
+                console.error('Chart data error:', e);
             }
         }
-
-        async function calculate() {
-            const btn = document.getElementById('calculateBtn');
-            const loading = document.getElementById('loading');
-            const results = document.getElementById('results');
-            const error = document.getElementById('error');
+        
+        async function updatePrice() {
+            try {
+                const symbol = document.getElementById('symbol').value;
+                const res = await fetch(`${API}/price/${symbol}`);
+                const data = await res.json();
+                if (data.price) {
+                    updatePriceDisplay(data.price);
+                }
+            } catch (e) {
+                console.error('Price update error:', e);
+            }
+        }
+        
+        function updatePriceDisplay(price) {
+            const el = document.getElementById('livePrice');
+            const oldPrice = parseFloat(el.textContent.replace(/[$,]/g, '')) || 0;
+            el.textContent = formatPrice(price);
+            el.className = 'live-price ' + (price >= oldPrice ? 'up' : 'down');
+        }
+        
+        function setDir(dir) {
+            direction = dir;
+            document.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector(`.dir-btn.${dir}`).classList.add('active');
+        }
+        
+        function symbolChanged() {
+            loadChartData();
+            document.getElementById('displaySymbol').textContent = document.getElementById('symbol').value;
+            document.getElementById('support').value = '';
+        }
+        
+        function updateBudgetDisplay() {
+            const account = parseFloat(document.getElementById('account').value) || 100000;
+            const riskPct = parseFloat(document.getElementById('riskCap').value) || 2.0;
+            const budget = account * (riskPct / 100);
+            document.getElementById('budgetTotal').textContent = `$${budget.toLocaleString()}`;
+        }
+        
+        document.getElementById('account').addEventListener('input', updateBudgetDisplay);
+        document.getElementById('riskCap').addEventListener('input', updateBudgetDisplay);
+        
+        async function analyze() {
+            const symbol = document.getElementById('symbol').value;
+            const support = parseFloat(document.getElementById('support').value);
+            const account = parseFloat(document.getElementById('account').value) || 100000;
+            const riskPct = parseFloat(document.getElementById('riskCap').value) || 2.0;
             
-            btn.disabled = true;
-            loading.classList.add('show');
-            results.classList.remove('show');
-            error.classList.remove('show');
+            if (!support) {
+                alert('Enter the structural support level');
+                return;
+            }
             
             try {
-                const entryPrice = currentPrice || 100000;
-                const accountBalance = parseFloat(document.getElementById('accountBalance').value) || 100000;
-                const riskPct = parseFloat(document.getElementById('riskPct').value) || 1.0;
+                const entryPrice = support * (direction === 'long' ? 1.015 : 0.985);
                 
                 const res = await fetch(`${API}/calculate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        symbol: currentSymbol,
+                        symbol,
                         entry_price: entryPrice,
-                        direction: currentDirection,
-                        timeframe: '4h',
-                        account_balance: accountBalance,
+                        direction,
+                        timeframe: currentTimeframe,
+                        account_balance: account,
                         risk_per_trade_pct: riskPct
                     })
                 });
                 
-                if (!res.ok) throw new Error('Calculation failed');
-                
                 currentData = await res.json();
-                displayResults(currentData);
+                currentData.structural_support = support;
+                
+                updateSummary(currentData);
+                updateStops(currentData, support);
+                updateContext(currentData);
+                drawPriceLines(currentData, support);
                 
             } catch (e) {
-                error.textContent = e.message;
-                error.classList.add('show');
-            } finally {
-                btn.disabled = false;
-                loading.classList.remove('show');
+                alert('Analysis failed: ' + e.message);
             }
         }
-
-        function displayResults(data) {
-            const results = document.getElementById('results');
+        
+        function drawPriceLines(data, support) {
+            // Remove old price lines
+            priceLines.forEach(line => candleSeries.removePriceLine(line));
+            priceLines = [];
             
-            // Context Scores
-            const mc = data.market_context || {};
-            setScore('scoreStructure', mc.structure_quality || 0, 10);
-            setScore('scoreVolume', mc.volume_profile_score || 0, 10);
-            setScore('scoreMTF', (mc.mtf_alignment || 0) * 10, 10);
+            const entry = data.entry_price;
+            const atr = (entry - support) * 0.2;
             
-            const flowEl = document.getElementById('scoreFlow');
-            const flow = mc.orderflow_bias || 'neutral';
-            flowEl.textContent = flow.charAt(0).toUpperCase();
-            flowEl.className = `score-value ${flow === 'bullish' ? 'high' : flow === 'bearish' ? 'low' : 'mid'}`;
+            // Entry line
+            priceLines.push(candleSeries.createPriceLine({
+                price: entry,
+                color: '#ffd700',
+                lineWidth: 2,
+                lineStyle: LightweightCharts.LineStyle.Solid,
+                axisLabelVisible: true,
+                title: 'Entry',
+            }));
             
-            // Price Ladder
-            renderLadder(data);
+            // Structural stop
+            const structuralStop = direction === 'long' ? support - atr : support + atr;
+            priceLines.push(candleSeries.createPriceLine({
+                price: structuralStop,
+                color: '#dc143c',
+                lineWidth: 2,
+                lineStyle: LightweightCharts.LineStyle.Solid,
+                axisLabelVisible: true,
+                title: 'Structural',
+            }));
             
-            // Position
-            document.getElementById('posSize').textContent = data.position_size.toFixed(4);
-            document.getElementById('posRisk').textContent = `$${data.risk_amount.toLocaleString()}`;
-            document.getElementById('posRR').textContent = `${data.risk_reward_ratio.toFixed(1)}R`;
+            // Safety net
+            const safetyNet = direction === 'long' ? entry * 0.95 : entry * 1.05;
+            priceLines.push(candleSeries.createPriceLine({
+                price: safetyNet,
+                color: '#ff5722',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: '5% Max',
+            }));
             
-            results.classList.add('show');
-        }
-
-        function setScore(id, value, max) {
-            const el = document.getElementById(id);
-            const score = (value / max) * 10;
-            el.textContent = score.toFixed(1);
-            el.className = `score-value ${score >= 7 ? 'high' : score >= 4 ? 'mid' : 'low'}`;
-        }
-
-        function renderLadder(data) {
-            const container = document.getElementById('ladderLevels');
-            let html = '';
+            // Guarding line (estimated)
+            const guardingLine = direction === 'long' ? entry * 0.99 : entry * 1.01;
+            priceLines.push(candleSeries.createPriceLine({
+                price: guardingLine,
+                color: '#2196f3',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dotted,
+                axisLabelVisible: true,
+                title: 'Guarding',
+            }));
             
-            // Targets (top)
-            const targets = data.targets.slice().reverse();
-            targets.forEach((t, i) => {
-                html += `
-                    <div class="ladder-level target">
-                        <div class="level-box target">
-                            <div class="level-type">T${targets.length - i} (${t.exit_percentage}%)</div>
-                            <div class="level-price">${formatPrice(t.price)}</div>
-                            <div class="level-meta">+${t.distance_pct.toFixed(1)}%</div>
-                        </div>
-                    </div>
-                `;
+            // Targets
+            data.targets.forEach((t, i) => {
+                priceLines.push(candleSeries.createPriceLine({
+                    price: t.price,
+                    color: '#00c853',
+                    lineWidth: 1,
+                    lineStyle: LightweightCharts.LineStyle.Solid,
+                    axisLabelVisible: true,
+                    title: `T${i+1} (${t.exit_percentage}%)`,
+                }));
             });
-            
-            // Entry (middle)
-            html += `
-                <div class="ladder-level entry">
-                    <div class="level-box entry">
-                        <div class="level-type">Entry</div>
-                        <div class="level-price">${formatPrice(data.entry_price)}</div>
-                    </div>
-                </div>
-            `;
-            
-            // Stops (bottom)
-            data.stops.forEach((s, i) => {
-                html += `
-                    <div class="ladder-level stop">
-                        <div class="level-box stop">
-                            <div class="level-type">${s.type.replace('_', ' ')}</div>
-                            <div class="level-price">${formatPrice(s.price)}</div>
-                            <div class="level-meta">-${s.distance_pct.toFixed(1)}%</div>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            container.innerHTML = html;
         }
-
+        
+        function updateSummary(data) {
+            document.getElementById('avgEntry').textContent = formatPrice(data.entry_price);
+            document.getElementById('totalSize').textContent = data.position_size.toFixed(4);
+            document.getElementById('riskUsed').textContent = `$${data.risk_amount.toLocaleString()}`;
+            document.getElementById('rrRatio').textContent = `${data.risk_reward_ratio.toFixed(1)}R`;
+        }
+        
+        function updateStops(data, support) {
+            const entry = data.entry_price;
+            const atr = (entry - support) * 0.2;
+            
+            document.getElementById('structuralPrice').textContent = formatPrice(support - atr);
+            document.getElementById('safetyPrice').textContent = formatPrice(entry * 0.95);
+            document.getElementById('guardingPrice').textContent = 'Bar 11+';
+        }
+        
+        function updateContext(data) {
+            const ctx = data.market_context || {};
+            
+            const struct = ctx.structure_quality || 0;
+            document.getElementById('ctxStructure').textContent = struct.toFixed(1);
+            document.getElementById('ctxStructure').style.color = struct >= 7 ? 'var(--green)' : struct >= 4 ? 'var(--gold)' : 'var(--red)';
+            
+            const vol = ctx.volume_profile_score || 0;
+            document.getElementById('ctxVolume').textContent = vol.toFixed(1);
+            document.getElementById('ctxVolume').style.color = vol >= 7 ? 'var(--green)' : vol >= 4 ? 'var(--gold)' : 'var(--red)';
+            
+            const flow = ctx.orderflow_bias || 'neutral';
+            document.getElementById('ctxFlow').textContent = flow.charAt(0).toUpperCase() + flow.slice(1);
+            document.getElementById('ctxFlow').style.color = flow === 'bullish' ? 'var(--green)' : flow === 'bearish' ? 'var(--red)' : 'var(--dim)';
+            
+            const mtf = (ctx.mtf_alignment || 0) * 10;
+            document.getElementById('ctxMTF').textContent = mtf.toFixed(1);
+            document.getElementById('ctxMTF').style.color = mtf >= 7 ? 'var(--green)' : mtf >= 4 ? 'var(--gold)' : 'var(--red)';
+        }
+        
         function formatPrice(price) {
+            if (!price) return '-';
             if (price >= 1000) {
                 return '$' + price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
-            return '$' + price.toFixed(4);
-        }
-
-        function copyLevels() {
-            if (!currentData) return;
-            
-            const d = currentData;
-            let text = `${d.symbol} ${d.direction.toUpperCase()}\n`;
-            text += `Entry: ${formatPrice(d.entry_price)}\n\n`;
-            
-            text += `TARGETS:\n`;
-            d.targets.forEach((t, i) => {
-                text += `  T${i+1}: ${formatPrice(t.price)} (+${t.distance_pct.toFixed(1)}%)\n`;
-            });
-            
-            text += `\nSTOPS:\n`;
-            d.stops.forEach(s => {
-                text += `  ${s.type}: ${formatPrice(s.price)} (-${s.distance_pct.toFixed(1)}%)\n`;
-            });
-            
-            text += `\nSIZE: ${d.position_size.toFixed(4)}\n`;
-            text += `RISK: $${d.risk_amount.toLocaleString()}\n`;
-            text += `R:R: ${d.risk_reward_ratio.toFixed(1)}R\n`;
-            
-            navigator.clipboard.writeText(text).then(() => {
-                const btn = document.querySelector('.copy-btn');
-                btn.textContent = 'Copied!';
-                setTimeout(() => btn.textContent = 'Copy Trade Plan', 2000);
-            });
+            return '$' + price.toFixed(2);
         }
     </script>
 </body>
