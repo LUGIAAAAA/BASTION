@@ -1,181 +1,161 @@
-<img width="2145" height="1310" alt="Mask group (14)" src="https://github.com/user-attachments/assets/878d4b09-22de-4b1d-b92e-e90189bbac3b" />
+# BASTION - Risk Management Engine
 
-# 🏰 BASTION
+A professional-grade cryptocurrency risk management system with real-time price feeds, multi-shot entry management, and dynamic stop-loss strategies.
 
-**Proactive Risk Management Infrastructure**
+![BASTION](https://img.shields.io/badge/BASTION-Risk%20Engine-crimson)
+![Python](https://img.shields.io/badge/Python-3.10+-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-Latest-green)
 
-BASTION provides structural stop-losses, dynamic take-profit targets, and adaptive position sizing for institutional and retail traders.
+## Features
 
----
+### 🎯 Risk Engine
+- **Strategy-Agnostic** - Provides market context without judging trade quality
+- **Multi-Tier Stops** - Structural, Safety Net, and Trailing Guard levels
+- **R-Multiple Targets** - Automatic target calculation at 2R, 3R, 5R
+- **Position Sizing** - ATR-adjusted sizing based on risk budget
 
-## 🎯 Features
+### 📊 Live Data Integration
+- **Helsinki VM** - Primary data source for real-time prices and OHLCV
+- **Binance Fallback** - Automatic failover for reliability
+- **Order Flow Data** - CVD, large trades, and liquidity zones
 
-- **Structural Stops** - Placed at actual support/resistance, not arbitrary percentages
-- **Dynamic Targets** - Based on market structure, not fixed R multiples
-- **Multi-Tier Defense** - Primary, secondary, and safety-net stops
-- **Guarding Line** - Structural trailing stops for swing trades
-- **Adaptive Sizing** - Volatility-adjusted position sizing
-- **Multi-Shot System** - Re-entry management with capped total risk
+### 💹 Trade Manager UI
+- **Real-Time Charts** - TradingView Lightweight Charts integration
+- **Multi-Shot Entries** - 50/30/20% risk allocation across 3 shots
+- **Live P&L Tracking** - Real-time unrealized and realized P&L
+- **Manual Guard Activation** - Lock profits when you decide
 
----
+## Quick Start
 
-## 🚀 Quick Start
+### Prerequisites
+- Python 3.10+
+- pip
 
 ### Installation
 
 ```bash
-cd C:\Users\Banke\MCF-Project\bastion
+# Clone the repository
+git clone https://github.com/LUGIAAAAA/BASTION.git
+cd BASTION
+
+# Install dependencies
 pip install -r requirements.txt
-```
 
-### Run API Server
-
-```bash
+# Run the server
 python run.py
 ```
 
-Server starts on `http://localhost:8001`
+### Access the UI
 
-### Test API
+- **Risk Calculator**: http://localhost:8001/app/index.html
+- **Trade Manager**: http://localhost:8001/app/trade-manager.html
+- **API Docs**: http://localhost:8001/docs
 
-```bash
-curl http://localhost:8001/health
+## API Endpoints
+
+### Health Check
+```
+GET /health
 ```
 
 ### Calculate Risk Levels
-
-```bash
-curl -X POST http://localhost:8001/calculate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "symbol": "BTCUSDT",
-    "entry_price": 95000,
-    "direction": "long",
-    "timeframe": "4h",
-    "account_balance": 100000,
-    "risk_per_trade_pct": 1.0
-  }'
 ```
-
----
-
-## 📊 Web Calculator
-
-Open `web/index.html` in your browser for the visual calculator interface.
-
-Or visit: `http://localhost:8001` (when server is running with static file serving enabled)
-
----
-
-## 📚 Documentation
-
-- [API Documentation](docs/API.md)
-- [Usage Examples](docs/EXAMPLES.md)
-- [Build Instructions](../BASTION_BUILD_INSTRUCTIONS.md)
-
----
-
-## 🏗️ Architecture
-
-```
-bastion/
-├── api/           # FastAPI backend
-├── core/          # Risk calculation engine
-├── data/          # Market data fetching
-├── web/           # Simple calculator UI
-├── tests/         # Unit tests
-└── docs/          # Documentation
-```
-
----
-
-## 🌐 Data Sources
-
-- **Primary:** Helsinki VM (77.42.29.188:5000, :5002)
-- **Fallback:** Binance API (direct)
-
----
-
-## 🔧 Configuration
-
-Create `.env` file:
-
-```env
-# API Settings
-API_HOST=0.0.0.0
-API_PORT=8001
-
-# Data Sources
-HELSINKI_SPOT=http://77.42.29.188:5000
-HELSINKI_QUANT=http://77.42.29.188:5002
-
-# Fallback
-BINANCE_API=https://api.binance.com
-```
-
----
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-pytest
-
-# Run specific test file
-pytest tests/test_api.py
-
-# Run with coverage
-pytest --cov=bastion tests/
-```
-
----
-
-## 📈 Example Response
-
-```json
+POST /calculate
 {
-  "symbol": "BTCUSDT",
-  "entry_price": 95000,
-  "stops": [
-    {
-      "type": "primary",
-      "price": 92500,
-      "distance_pct": 2.6,
-      "reason": "Below support at 92800"
-    }
-  ],
-  "targets": [
-    {
-      "price": 98000,
-      "exit_percentage": 33,
-      "reason": "Resistance level (R:R 2.5)"
-    }
-  ],
-  "position_size": 0.421,
-  "risk_amount": 1000,
-  "risk_reward_ratio": 2.5
+    "symbol": "BTCUSDT",
+    "direction": "long",
+    "entry_price": 91000,
+    "stop_price": 89000,
+    "account_balance": 100000,
+    "risk_per_trade_pct": 2.0
 }
 ```
 
+### Live Price
+```
+GET /price/{symbol}
+```
+
+### OHLCV Bars
+```
+GET /bars/{symbol}?timeframe=4h&limit=100
+```
+
+### Session Management
+```
+POST /session/create
+POST /session/{id}/shot
+GET /session/{id}
+DELETE /session/{id}
+```
+
+## Architecture
+
+```
+BASTION/
+├── api/
+│   ├── server.py          # FastAPI application
+│   ├── models.py           # Pydantic request/response models
+│   └── session_routes.py   # Session management endpoints
+├── core/
+│   ├── risk_engine.py      # Main risk calculation engine
+│   ├── session.py          # Trade session management
+│   └── adaptive_budget.py  # Multi-shot allocation logic
+├── data/
+│   ├── fetcher.py          # Data fetching utilities
+│   └── live_feed.py        # Real-time price feeds
+├── web/
+│   ├── index.html          # Risk calculator UI
+│   ├── session.html        # Session tracker UI
+│   └── trade-manager.html  # Dynamic trade manager
+└── run.py                  # Application entry point
+```
+
+## Risk Management Philosophy
+
+### Multi-Tier Stop System
+1. **Primary Stop** - Structural support minus ATR buffer
+2. **Safety Net** - Maximum 5% loss from entry
+3. **Trailing Guard** - Manual activation to lock profits (2% buffer)
+
+### Multi-Shot Entries
+- **Shot 1 (50%)** - Initial entry on setup confirmation
+- **Shot 2 (30%)** - Add on support bounce
+- **Shot 3 (20%)** - Add on breakout confirmation
+
+### R-Multiple Targets
+- **T1 (2R)** - Take 33% profit
+- **T2 (3R)** - Take 33% profit
+- **T3 (5R)** - Exit remaining via guard
+
+## Data Sources
+
+### Helsinki VM (Primary)
+- Endpoint: `http://77.42.29.188:5000` (Spot Data)
+- Endpoint: `http://77.42.29.188:5002` (Quant Data)
+
+### Binance (Fallback)
+- Endpoint: `https://api.binance.com`
+
+## Configuration
+
+Default settings in the engine:
+- Risk per trade: 2% of account
+- ATR period: 14
+- Safety net: 5% from entry
+- Guard buffer: 2% from current price
+
+## License
+
+MIT License - See LICENSE for details
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
 ---
 
-## 🎨 Brand
-
-- **Colors:** Deep Red (#8B0000), Silver (#C0C0C0), Black (#000000)
-- **Style:** Dark, professional, institutional
-- **Aesthetic:** Military precision meets modern fintech
-
----
-
-## 📝 License
-
-Proprietary - All rights reserved.
-
----
-
-## 🤝 Support
-
-For questions and support, contact: [support email]
-
-**Built with precision. Managed with structure.**
-
+**BASTION** - *Protecting your capital, one trade at a time.*

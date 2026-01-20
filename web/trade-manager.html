@@ -1,0 +1,1814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BASTION - Dynamic Trade Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --bg: #0a0a0a;
+            --surface: #111;
+            --surface-2: #1a1a1a;
+            --border: #2a2a2a;
+            --text: #e0e0e0;
+            --dim: #666;
+            --accent: #dc143c;
+            --green: #00c853;
+            --red: #dc143c;
+            --gold: #ffd700;
+            --blue: #2196f3;
+            --orange: #ff9800;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 24px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+        
+        .logo {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .nav-link {
+            padding: 6px 12px;
+            border-radius: 6px;
+            color: var(--dim);
+            text-decoration: none;
+            font-size: 0.8rem;
+        }
+        
+        .nav-link:hover, .nav-link.active {
+            color: var(--text);
+            background: var(--surface-2);
+        }
+        
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: rgba(0, 200, 83, 0.1);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: var(--green);
+        }
+        
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--green);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        
+        /* Main Layout */
+        .main {
+            display: grid;
+            grid-template-columns: 300px 1fr 300px;
+            min-height: calc(100vh - 56px);
+        }
+        
+        .panel {
+            padding: 16px;
+            overflow-y: auto;
+            border-right: 1px solid var(--border);
+        }
+        
+        .panel:last-child {
+            border-right: none;
+        }
+        
+        .center-panel {
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+            padding: 0;
+        }
+        
+        /* Phase Indicator */
+        .phase-indicator {
+            display: flex;
+            padding: 12px 16px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            gap: 4px;
+        }
+        
+        .phase {
+            flex: 1;
+            text-align: center;
+            padding: 10px 6px;
+            background: var(--surface-2);
+            border-radius: 6px;
+            border: 1px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .phase.active {
+            background: rgba(220, 20, 60, 0.15);
+            border-color: var(--accent);
+        }
+        
+        .phase.completed {
+            background: rgba(0, 200, 83, 0.1);
+            border-color: var(--green);
+        }
+        
+        .phase-number {
+            font-size: 0.55rem;
+            color: var(--dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        
+        .phase.active .phase-number { color: var(--accent); }
+        .phase.completed .phase-number { color: var(--green); }
+        
+        .phase-name {
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+        
+        .phase-arrow {
+            display: flex;
+            align-items: center;
+            color: var(--dim);
+            font-size: 0.7rem;
+        }
+        
+        /* Sections */
+        .section {
+            margin-bottom: 20px;
+        }
+        
+        .section-title {
+            font-size: 0.65rem;
+            color: var(--dim);
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            margin-bottom: 12px;
+        }
+        
+        /* Form */
+        .form-group {
+            margin-bottom: 12px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-size: 0.7rem;
+            color: var(--dim);
+            margin-bottom: 6px;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .direction-btns {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .dir-btn {
+            flex: 1;
+            padding: 12px;
+            background: var(--surface-2);
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            color: var(--dim);
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .dir-btn.long.active {
+            background: rgba(0, 200, 83, 0.15);
+            border-color: var(--green);
+            color: var(--green);
+        }
+        
+        .dir-btn.short.active {
+            background: rgba(220, 20, 60, 0.15);
+            border-color: var(--red);
+            color: var(--red);
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+        
+        .btn-success {
+            background: var(--green);
+            color: var(--bg);
+        }
+        
+        .btn-danger {
+            background: var(--red);
+            color: white;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* Auto-detected info */
+        .auto-info {
+            background: var(--surface-2);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+        }
+        
+        .auto-info-title {
+            font-size: 0.65rem;
+            color: var(--dim);
+            margin-bottom: 8px;
+        }
+        
+        .auto-info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 0.8rem;
+        }
+        
+        .auto-info-label {
+            color: var(--dim);
+        }
+        
+        .auto-info-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+        }
+        
+        .auto-info-value.detected {
+            color: var(--green);
+        }
+        
+        /* Budget */
+        .budget-card {
+            background: var(--surface-2);
+            border-radius: 8px;
+            padding: 14px;
+        }
+        
+        .budget-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        
+        .budget-label {
+            font-size: 0.7rem;
+            color: var(--dim);
+        }
+        
+        .budget-amount {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--gold);
+        }
+        
+        .budget-bar {
+            height: 8px;
+            background: var(--bg);
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+        }
+        
+        .budget-segment {
+            height: 100%;
+        }
+        
+        .budget-segment.s1 { background: var(--accent); width: 50%; }
+        .budget-segment.s2 { background: #ff6b6b; width: 30%; }
+        .budget-segment.s3 { background: var(--orange); width: 20%; }
+        .budget-segment.used { opacity: 0.3; }
+        
+        .budget-legend {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 0.6rem;
+            color: var(--dim);
+        }
+        
+        /* Shot Cards */
+        .shot-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .shot-card {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+        }
+        
+        .shot-card.executed {
+            border-color: var(--green);
+            background: rgba(0, 200, 83, 0.05);
+        }
+        
+        .shot-card.waiting {
+            opacity: 0.6;
+        }
+        
+        .shot-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .shot-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .shot-badge {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.6rem;
+            font-weight: 600;
+        }
+        
+        .shot-badge.executed {
+            background: var(--green);
+            color: var(--bg);
+        }
+        
+        .shot-badge.waiting {
+            background: var(--surface);
+            color: var(--dim);
+        }
+        
+        .shot-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        
+        .shot-stat {
+            font-size: 0.75rem;
+        }
+        
+        .shot-stat-label {
+            color: var(--dim);
+            font-size: 0.6rem;
+        }
+        
+        .shot-stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+        }
+        
+        /* Chart */
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .symbol-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .symbol-name {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+        
+        .symbol-dir {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        
+        .symbol-dir.long {
+            background: rgba(0, 200, 83, 0.2);
+            color: var(--green);
+        }
+        
+        .symbol-dir.short {
+            background: rgba(220, 20, 60, 0.2);
+            color: var(--red);
+        }
+        
+        .live-price {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+        
+        .live-price.up { color: var(--green); }
+        .live-price.down { color: var(--red); }
+        
+        /* Metrics */
+        .metrics-bar {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1px;
+            background: var(--border);
+        }
+        
+        .metric {
+            background: var(--surface);
+            padding: 12px;
+            text-align: center;
+        }
+        
+        .metric-label {
+            font-size: 0.55rem;
+            color: var(--dim);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        
+        .metric-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+        
+        .metric-value.green { color: var(--green); }
+        .metric-value.red { color: var(--red); }
+        .metric-value.gold { color: var(--gold); }
+        
+        /* Chart Container */
+        .chart-container {
+            flex: 1;
+            position: relative;
+            min-height: 350px;
+            overflow: hidden;
+        }
+        
+        #mainChart {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .no-session {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg);
+        }
+        
+        .no-session-icon {
+            font-size: 3rem;
+            margin-bottom: 12px;
+            opacity: 0.3;
+        }
+        
+        .no-session h3 {
+            font-size: 1rem;
+            margin-bottom: 6px;
+        }
+        
+        .no-session p {
+            font-size: 0.8rem;
+            color: var(--dim);
+        }
+        
+        /* Chart Legend */
+        .chart-legend {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            display: flex;
+            gap: 16px;
+            padding: 8px 12px;
+            background: rgba(10, 10, 10, 0.9);
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            z-index: 10;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.65rem;
+            color: var(--dim);
+        }
+        
+        .legend-line {
+            width: 20px;
+            height: 3px;
+            border-radius: 1px;
+        }
+        
+        .legend-line.dashed {
+            background: linear-gradient(90deg, currentColor 60%, transparent 60%);
+            background-size: 6px 100%;
+        }
+        
+        .legend-line.dotted {
+            background: linear-gradient(90deg, currentColor 30%, transparent 30%);
+            background-size: 4px 100%;
+        }
+        
+        .legend-line.guarding-ghost {
+            background: rgba(0, 200, 83, 0.4);
+        }
+        
+        .legend-line.guarding-active {
+            background: #00c853;
+            box-shadow: 0 0 6px #00c853;
+        }
+        
+        /* Guarding Panel */
+        .guarding-panel {
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            padding: 14px 16px;
+            transition: box-shadow 0.5s ease;
+        }
+        
+        .guarding-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .guarding-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .guarding-status {
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 0.6rem;
+            font-weight: 600;
+        }
+        
+        .guarding-status.inactive {
+            background: var(--surface-2);
+            color: var(--dim);
+        }
+        
+        .guarding-status.active {
+            background: var(--blue);
+            color: white;
+            animation: glow 2s infinite;
+        }
+        
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 5px var(--blue); }
+            50% { box-shadow: 0 0 15px var(--blue); }
+        }
+        
+        .guarding-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .guarding-stat {
+            text-align: center;
+            padding: 8px;
+            background: var(--surface-2);
+            border-radius: 6px;
+        }
+        
+        .guarding-stat-label {
+            font-size: 0.55rem;
+            color: var(--dim);
+        }
+        
+        .guarding-stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--blue);
+        }
+        
+        .progress-bar-container {
+            margin-top: 8px;
+        }
+        
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.6rem;
+            color: var(--dim);
+            margin-bottom: 4px;
+        }
+        
+        .progress-bar {
+            height: 6px;
+            background: var(--surface-2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--blue));
+            transition: width 0.5s;
+        }
+        
+        .cone-info {
+            margin-top: 10px;
+            padding: 8px;
+            background: var(--surface-2);
+            border-radius: 4px;
+            font-size: 0.65rem;
+            color: var(--dim);
+            text-align: center;
+        }
+        
+        /* Right Panel */
+        .exit-priority {
+            background: var(--surface-2);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .exit-item {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        
+        .exit-item:last-child {
+            border-bottom: none;
+        }
+        
+        .exit-item.triggered {
+            background: rgba(220, 20, 60, 0.15);
+            border-left: 3px solid var(--red);
+        }
+        
+        .exit-num {
+            width: 20px;
+            height: 20px;
+            background: var(--surface);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        
+        .exit-content {
+            flex: 1;
+        }
+        
+        .exit-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        
+        .exit-desc {
+            font-size: 0.6rem;
+            color: var(--dim);
+        }
+        
+        .exit-action {
+            font-size: 0.6rem;
+            color: var(--orange);
+            margin-top: 2px;
+        }
+        
+        /* Targets */
+        .target-timeline {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 8px;
+            position: relative;
+        }
+        
+        .target-timeline::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 35px;
+            right: 35px;
+            height: 2px;
+            background: var(--border);
+            transform: translateY(-50%);
+        }
+        
+        .target-node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            z-index: 1;
+        }
+        
+        .target-circle {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--surface-2);
+            border: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        
+        .target-circle.hit {
+            background: var(--green);
+            border-color: var(--green);
+            color: var(--bg);
+        }
+        
+        .target-label {
+            text-align: center;
+        }
+        
+        .target-pct {
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        
+        .target-price {
+            font-size: 0.6rem;
+            color: var(--dim);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        /* Stop Levels */
+        .stop-levels {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        .stop-level {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            background: var(--surface-2);
+            border-radius: 6px;
+            border-left: 3px solid transparent;
+        }
+        
+        .stop-level.active {
+            border-left-color: var(--red);
+            background: rgba(220, 20, 60, 0.1);
+        }
+        
+        .stop-level.guarding-active {
+            border-left-color: var(--blue);
+            background: rgba(33, 150, 243, 0.1);
+        }
+        
+        .stop-name {
+            font-size: 0.75rem;
+        }
+        
+        .stop-tag {
+            font-size: 0.5rem;
+            padding: 2px 5px;
+            background: var(--surface);
+            border-radius: 3px;
+            color: var(--dim);
+            margin-left: 6px;
+        }
+        
+        .stop-price {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        @media (max-width: 1100px) {
+            .main { grid-template-columns: 260px 1fr 260px; }
+        }
+        
+        @media (max-width: 900px) {
+            .main { grid-template-columns: 1fr; }
+            .panel { border-right: none; border-bottom: 1px solid var(--border); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">BASTION</div>
+            <nav class="nav-links">
+                <a href="index.html" class="nav-link">Calculator</a>
+                <a href="trade-manager.html" class="nav-link active">Trade Manager</a>
+            </nav>
+        </div>
+        <div class="live-indicator">
+            <div class="live-dot"></div>
+            <span>LIVE</span>
+        </div>
+    </div>
+    
+    <div class="main">
+        <!-- Left Panel -->
+        <div class="panel">
+            <div class="section" id="entrySection">
+                <div class="section-title">Quick Setup</div>
+                
+                <div class="form-group">
+                    <label>Symbol</label>
+                    <select class="form-input" id="symbol">
+                        <option value="BTCUSDT">BTC/USDT</option>
+                        <option value="ETHUSDT">ETH/USDT</option>
+                        <option value="SOLUSDT">SOL/USDT</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Direction</label>
+                    <div class="direction-btns">
+                        <button class="dir-btn long active" id="longBtn">LONG</button>
+                        <button class="dir-btn short" id="shortBtn">SHORT</button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Account Balance ($)</label>
+                    <input type="number" class="form-input" id="account" value="100000">
+                </div>
+                
+                <div class="form-group">
+                    <label>Entry Price (leave blank for market price)</label>
+                    <input type="number" class="form-input" id="entryInput" placeholder="Auto: use current price">
+                </div>
+                
+                <div class="auto-info" id="autoInfo">
+                    <div class="auto-info-title">Auto-Detected from Market</div>
+                    <div class="auto-info-row">
+                        <span class="auto-info-label">Current Price</span>
+                        <span class="auto-info-value detected" id="detectedPrice">Loading...</span>
+                    </div>
+                    <div class="auto-info-row">
+                        <span class="auto-info-label">Support Level</span>
+                        <span class="auto-info-value detected" id="detectedSupport">Loading...</span>
+                    </div>
+                    <div class="auto-info-row">
+                        <span class="auto-info-label">Primary Stop</span>
+                        <span class="auto-info-value" style="color: var(--red);" id="detectedStop">-</span>
+                    </div>
+                    <div class="auto-info-row">
+                        <span class="auto-info-label">Risk Budget (2%)</span>
+                        <span class="auto-info-value" id="detectedBudget">$2,000</span>
+                    </div>
+                </div>
+                
+                <button class="btn btn-primary" id="startBtn">Start Trade Session</button>
+            </div>
+            
+            <!-- Budget (shown after start) -->
+            <div class="section" id="budgetSection" style="display: none;">
+                <div class="section-title">Risk Budget</div>
+                <div class="budget-card">
+                    <div class="budget-header">
+                        <span class="budget-label">Total (2%)</span>
+                        <span class="budget-amount" id="totalBudget">$2,000</span>
+                    </div>
+                    <div class="budget-bar">
+                        <div class="budget-segment s1" id="seg1"></div>
+                        <div class="budget-segment s2" id="seg2"></div>
+                        <div class="budget-segment s3" id="seg3"></div>
+                    </div>
+                    <div class="budget-legend">
+                        <span>50%</span>
+                        <span>30%</span>
+                        <span>20%</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Shots -->
+            <div class="section" id="shotsSection" style="display: none;">
+                <div class="section-title">Multi-Shot Entries</div>
+                <div class="shot-cards" id="shotCards"></div>
+            </div>
+        </div>
+        
+        <!-- Center -->
+        <div class="center-panel">
+            <div class="phase-indicator">
+                <div class="phase active" id="phase1">
+                    <div class="phase-number">Phase 1</div>
+                    <div class="phase-name">Entry</div>
+                </div>
+                <div class="phase-arrow">→</div>
+                <div class="phase" id="phase2">
+                    <div class="phase-number">Phase 2</div>
+                    <div class="phase-name">Scale In</div>
+                </div>
+                <div class="phase-arrow">→</div>
+                <div class="phase" id="phase3">
+                    <div class="phase-number">Phase 3</div>
+                    <div class="phase-name">Guarding</div>
+                </div>
+                <div class="phase-arrow">→</div>
+                <div class="phase" id="phase4">
+                    <div class="phase-number">Phase 4</div>
+                    <div class="phase-name">Exits</div>
+                </div>
+            </div>
+            
+            <div class="chart-header" id="chartHeader" style="display: none;">
+                <div class="symbol-info">
+                    <span class="symbol-name" id="displaySymbol">BTCUSDT</span>
+                    <span class="symbol-dir long" id="displayDir">LONG</span>
+                </div>
+                <span class="live-price up" id="livePrice">$0.00</span>
+            </div>
+            
+            <div class="metrics-bar" id="metricsBar" style="display: none;">
+                <div class="metric">
+                    <div class="metric-label">R-Multiple</div>
+                    <div class="metric-value" id="metricBars">0R</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Avg Entry</div>
+                    <div class="metric-value" id="metricEntry">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Size</div>
+                    <div class="metric-value" id="metricSize">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Unrealized</div>
+                    <div class="metric-value green" id="metricPnl">$0</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Realized</div>
+                    <div class="metric-value gold" id="metricRealized">$0</div>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <div id="mainChart"></div>
+                <div class="no-session" id="noSession">
+                    <div class="no-session-icon">📈</div>
+                    <h3>Ready to Trade</h3>
+                    <p>Click "Start Trade Session" to begin</p>
+                </div>
+                <div class="chart-legend" id="chartLegend" style="display: none;">
+                    <div class="legend-item">
+                        <span class="legend-line" style="background: #ffd700;"></span>
+                        <span>Entry</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-line" style="background: #dc143c;"></span>
+                        <span>Stop</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-line dashed" style="background: #ff9800;"></span>
+                        <span>Safety</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-line dashed" style="background: #00d9ff;"></span>
+                        <span>Targets (R)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-line" style="background: #00c853;"></span>
+                        <span>Guard</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="guarding-panel" id="guardingPanel" style="display: none;">
+                <div class="guarding-header">
+                    <span class="guarding-title">🛡️ Trailing Guard</span>
+                    <span class="guarding-status inactive" id="guardingStatus">Manual</span>
+                </div>
+                <div class="guarding-stats">
+                    <div class="guarding-stat">
+                        <div class="guarding-stat-label">Guard Level</div>
+                        <div class="guarding-stat-value" id="guardingLevel">-</div>
+                    </div>
+                    <div class="guarding-stat">
+                        <div class="guarding-stat-label">Distance</div>
+                        <div class="guarding-stat-value" id="guardDist">-</div>
+                    </div>
+                    <div class="guarding-stat">
+                        <div class="guarding-stat-label">Buffer</div>
+                        <div class="guarding-stat-value">2%</div>
+                    </div>
+                </div>
+                <button class="btn btn-success" id="activateGuardBtn" style="margin-top: 10px;">
+                    Activate Trailing Guard
+                </button>
+                <div class="cone-info" id="coneInfo">
+                    <small>📐 Activate guard when trade reaches +1R to lock in profits</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Panel -->
+        <div class="panel">
+            <div class="section">
+                <div class="section-title">Exit Priority</div>
+                <div class="exit-priority">
+                    <div class="exit-item" id="exit1">
+                        <div class="exit-num">1</div>
+                        <div class="exit-content">
+                            <div class="exit-title">⚠️ Opposing Signal</div>
+                            <div class="exit-desc">MCF bearish setup forms</div>
+                            <div class="exit-action">→ Exit 100%</div>
+                        </div>
+                    </div>
+                    <div class="exit-item" id="exit2">
+                        <div class="exit-num">2</div>
+                        <div class="exit-content">
+                            <div class="exit-title">🛡️ Guarding Broken</div>
+                            <div class="exit-desc">Price closes below trailing guard</div>
+                            <div class="exit-action">→ Exit 100%</div>
+                        </div>
+                    </div>
+                    <div class="exit-item" id="exit3">
+                        <div class="exit-num">3</div>
+                        <div class="exit-content">
+                            <div class="exit-title">📉 Structure Broken</div>
+                            <div class="exit-desc">Support level violated</div>
+                            <div class="exit-action">→ Exit 100%</div>
+                        </div>
+                    </div>
+                    <div class="exit-item" id="exit4">
+                        <div class="exit-num">4</div>
+                        <div class="exit-content">
+                            <div class="exit-title">📊 Momentum Weak</div>
+                            <div class="exit-desc">Divergence detected</div>
+                            <div class="exit-action">→ Exit 33%</div>
+                        </div>
+                    </div>
+                    <div class="exit-item" id="exit5">
+                        <div class="exit-num">5</div>
+                        <div class="exit-content">
+                            <div class="exit-title">📈 Volume Climax</div>
+                            <div class="exit-desc">Spike at resistance</div>
+                            <div class="exit-action">→ Take profit</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section" id="targetSection" style="display: none;">
+                <div class="section-title">Partial Exits</div>
+                <div class="target-timeline">
+                    <div class="target-node">
+                        <div class="target-circle" id="t1Circle">1</div>
+                        <div class="target-label">
+                            <div class="target-pct">33%</div>
+                            <div class="target-price" id="t1Price">-</div>
+                        </div>
+                    </div>
+                    <div class="target-node">
+                        <div class="target-circle" id="t2Circle">2</div>
+                        <div class="target-label">
+                            <div class="target-pct">33%</div>
+                            <div class="target-price" id="t2Price">-</div>
+                        </div>
+                    </div>
+                    <div class="target-node">
+                        <div class="target-circle" id="t3Circle">3</div>
+                        <div class="target-label">
+                            <div class="target-pct">34%</div>
+                            <div class="target-price">Guard</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section" id="stopsSection" style="display: none;">
+                <div class="section-title">3-Tier Stops</div>
+                <div class="stop-levels">
+                    <div class="stop-level active" id="stopStructural">
+                        <div>
+                            <span class="stop-name" style="color: var(--red)">Structural</span>
+                            <span class="stop-tag">ACTIVE</span>
+                        </div>
+                        <span class="stop-price" id="structuralPrice">-</span>
+                    </div>
+                    <div class="stop-level" id="stopGuarding">
+                        <div>
+                            <span class="stop-name" style="color: var(--blue)">Guarding</span>
+                            <span class="stop-tag" id="guardingTag">BAR 11+</span>
+                        </div>
+                        <span class="stop-price" id="guardingStopPrice">-</span>
+                    </div>
+                    <div class="stop-level" id="stopSafety">
+                        <div>
+                            <span class="stop-name" style="color: var(--orange)">Safety Net</span>
+                            <span class="stop-tag">5%</span>
+                        </div>
+                        <span class="stop-price" id="safetyPrice">-</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section" id="exitBtnSection" style="display: none;">
+                <button class="btn btn-danger" id="exitBtn">Exit All Positions</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API = 'http://localhost:8001';
+        
+        let state = {
+            active: false,
+            symbol: 'BTCUSDT',
+            direction: 'long',
+            account: 100000,
+            currentPrice: 0,
+            supportLevel: 0,
+            entryPrice: 0,
+            budget: 2000,
+            phase: 1,
+            shots: [],
+            avgEntry: 0,
+            totalSize: 0,
+            guardingActive: false,
+            guardingLevel: 0,
+            unrealizedPnl: 0,
+            realizedPnl: 0,
+            targetsHit: 0
+        };
+        
+        let chart, candleSeries, priceLines = [];
+        let guardingLineSeries, primaryStopSeries, secondaryStopSeries, safetyNetSeries;
+        let entryMarker;
+        let simInterval;
+        let chartBars = [];
+        let tradeStartTime = 0;
+        
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            initChart();
+            loadMarketData();
+            setupEventListeners();
+        });
+        
+        function setupEventListeners() {
+            document.getElementById('longBtn').addEventListener('click', () => setDir('long'));
+            document.getElementById('shortBtn').addEventListener('click', () => setDir('short'));
+            document.getElementById('startBtn').addEventListener('click', startSession);
+            document.getElementById('exitBtn').addEventListener('click', exitSession);
+            document.getElementById('symbol').addEventListener('change', loadMarketData);
+            document.getElementById('account').addEventListener('change', updateBudgetDisplay);
+            document.getElementById('entryInput').addEventListener('input', updateStopPreview);
+            document.getElementById('activateGuardBtn').addEventListener('click', activateGuarding);
+        }
+        
+        function updateStopPreview() {
+            const manualEntry = parseFloat(document.getElementById('entryInput').value);
+            const entryPrice = manualEntry > 0 ? manualEntry : state.currentPrice;
+            
+            if (entryPrice && state.supportLevel) {
+                const atr = (entryPrice - state.supportLevel) * 0.2;
+                const dir = state.direction === 'long' ? 1 : -1;
+                const stopPrice = state.direction === 'long' ? 
+                    state.supportLevel - atr : state.supportLevel + atr;
+                document.getElementById('detectedStop').textContent = formatPrice(stopPrice);
+            }
+        }
+        
+        function setDir(dir) {
+            state.direction = dir;
+            document.getElementById('longBtn').classList.toggle('active', dir === 'long');
+            document.getElementById('shortBtn').classList.toggle('active', dir === 'short');
+            updateStopPreview();
+        }
+        
+        function updateBudgetDisplay() {
+            const account = parseFloat(document.getElementById('account').value) || 100000;
+            state.account = account;
+            state.budget = account * 0.02;
+            document.getElementById('detectedBudget').textContent = `$${state.budget.toLocaleString()}`;
+        }
+        
+        async function loadMarketData() {
+            state.symbol = document.getElementById('symbol').value;
+            
+            try {
+                // Get current price
+                const priceRes = await fetch(`${API}/price/${state.symbol}`);
+                const priceData = await priceRes.json();
+                state.currentPrice = priceData.price || 0;
+                
+                // Get bars to find support
+                const barsRes = await fetch(`${API}/bars/${state.symbol}?timeframe=4h&limit=50`);
+                const barsData = await barsRes.json();
+                
+                if (barsData.bars && barsData.bars.length > 0) {
+                    // Find lowest low in last 20 bars as support
+                    const recentBars = barsData.bars.slice(-20);
+                    const lows = recentBars.map(b => parseFloat(b.low));
+                    state.supportLevel = Math.min(...lows);
+                    
+                    // Load chart
+                    loadChartData(barsData.bars);
+                }
+                
+                document.getElementById('detectedPrice').textContent = formatPrice(state.currentPrice);
+                document.getElementById('detectedSupport').textContent = formatPrice(state.supportLevel);
+                
+                // Calculate primary stop
+                const atr = (state.currentPrice - state.supportLevel) * 0.2;
+                const stopPrice = state.supportLevel - atr;
+                document.getElementById('detectedStop').textContent = formatPrice(stopPrice);
+                
+            } catch (e) {
+                console.error('Failed to load market data:', e);
+                document.getElementById('detectedPrice').textContent = 'Error';
+                document.getElementById('detectedSupport').textContent = 'Error';
+            }
+            
+            updateBudgetDisplay();
+        }
+        
+        function initChart() {
+            const container = document.getElementById('mainChart');
+            
+            chart = LightweightCharts.createChart(container, {
+                layout: {
+                    background: { type: 'solid', color: '#0a0a0a' },
+                    textColor: '#666',
+                },
+                grid: {
+                    vertLines: { color: '#1a1a1a' },
+                    horzLines: { color: '#1a1a1a' },
+                },
+                rightPriceScale: { borderColor: '#2a2a2a' },
+                timeScale: { borderColor: '#2a2a2a', timeVisible: true },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                },
+            });
+            
+            candleSeries = chart.addCandlestickSeries({
+                upColor: '#00c853',
+                downColor: '#dc143c',
+                borderUpColor: '#00c853',
+                borderDownColor: '#dc143c',
+                wickUpColor: '#00c853',
+                wickDownColor: '#dc143c',
+            });
+            
+            // Hidden line series (kept for compatibility but not used)
+            safetyNetSeries = chart.addLineSeries({ visible: false });
+            secondaryStopSeries = chart.addLineSeries({ visible: false });
+            primaryStopSeries = chart.addLineSeries({ visible: false });
+            guardingLineSeries = chart.addLineSeries({ visible: false });
+            
+            new ResizeObserver(() => {
+                chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
+            }).observe(container);
+        }
+        
+        function loadChartData(bars) {
+            const candles = bars.map(bar => {
+                let time;
+                if (typeof bar.timestamp === 'string') {
+                    time = Math.floor(new Date(bar.timestamp).getTime() / 1000);
+                } else {
+                    time = bar.timestamp > 1e12 ? Math.floor(bar.timestamp / 1000) : bar.timestamp;
+                }
+                return {
+                    time,
+                    open: parseFloat(bar.open),
+                    high: parseFloat(bar.high),
+                    low: parseFloat(bar.low),
+                    close: parseFloat(bar.close),
+                };
+            }).sort((a, b) => a.time - b.time);
+            
+            const unique = candles.filter((c, i, arr) => i === 0 || c.time !== arr[i-1].time);
+            chartBars = unique; // Store for angled line calculations
+            candleSeries.setData(unique);
+            chart.timeScale().fitContent();
+        }
+        
+        function startSession() {
+            if (!state.currentPrice || !state.supportLevel) {
+                alert('Waiting for market data...');
+                return;
+            }
+            
+            state.active = true;
+            
+            // Use manual entry price if provided, otherwise use current market price
+            const manualEntry = parseFloat(document.getElementById('entryInput').value);
+            state.entryPrice = manualEntry > 0 ? manualEntry : state.currentPrice;
+            state.phase = 2;
+            
+            // Set trade start time (last bar in chart)
+            if (chartBars.length > 0) {
+                tradeStartTime = chartBars[chartBars.length - 1].time;
+            } else {
+                tradeStartTime = Math.floor(Date.now() / 1000);
+            }
+            
+            // Calculate stop
+            const atr = (state.entryPrice - state.supportLevel) * 0.2;
+            const stopPrice = state.direction === 'long' ? 
+                state.supportLevel - atr : state.supportLevel + atr;
+            
+            // Shot 1
+            const shot1Risk = state.budget * 0.5;
+            const riskDist = Math.abs(state.entryPrice - stopPrice);
+            const shot1Size = shot1Risk / riskDist;
+            
+            state.shots = [
+                { executed: true, entry: state.entryPrice, size: shot1Size, risk: shot1Risk, stop: stopPrice },
+                { executed: false, entry: 0, size: 0, risk: state.budget * 0.3, stop: stopPrice },
+                { executed: false, entry: 0, size: 0, risk: state.budget * 0.2, stop: stopPrice }
+            ];
+            
+            state.avgEntry = state.entryPrice;
+            state.totalSize = shot1Size;
+            
+            // Show UI
+            document.getElementById('noSession').style.display = 'none';
+            document.getElementById('entrySection').style.display = 'none';
+            document.getElementById('budgetSection').style.display = 'block';
+            document.getElementById('shotsSection').style.display = 'block';
+            document.getElementById('chartHeader').style.display = 'flex';
+            document.getElementById('metricsBar').style.display = 'grid';
+            document.getElementById('guardingPanel').style.display = 'block';
+            document.getElementById('targetSection').style.display = 'block';
+            document.getElementById('stopsSection').style.display = 'block';
+            document.getElementById('exitBtnSection').style.display = 'block';
+            
+            document.getElementById('displaySymbol').textContent = state.symbol;
+            document.getElementById('displayDir').textContent = state.direction.toUpperCase();
+            document.getElementById('displayDir').className = `symbol-dir ${state.direction}`;
+            document.getElementById('totalBudget').textContent = `$${state.budget.toLocaleString()}`;
+            document.getElementById('chartLegend').style.display = 'flex';
+            
+            renderShots();
+            updateMetrics();
+            updateStops();
+            setPhase(2);
+            drawRiskLevels();
+            
+            // Start live price polling (real data, not simulation)
+            simInterval = setInterval(pollLivePrice, 3000);
+        }
+        
+        function renderShots() {
+            const container = document.getElementById('shotCards');
+            const colors = ['var(--accent)', '#ff6b6b', 'var(--orange)'];
+            const labels = ['Shot 1 (50%)', 'Shot 2 (30%)', 'Shot 3 (20%)'];
+            
+            container.innerHTML = state.shots.map((shot, i) => {
+                const executed = shot.executed;
+                return `
+                    <div class="shot-card ${executed ? 'executed' : 'waiting'}" id="shotCard${i}">
+                        <div class="shot-header">
+                            <span class="shot-title" style="color: ${colors[i]}">${labels[i]}</span>
+                            <span class="shot-badge ${executed ? 'executed' : 'waiting'}">${executed ? 'Executed' : 'Waiting'}</span>
+                        </div>
+                        <div class="shot-grid">
+                            <div class="shot-stat">
+                                <div class="shot-stat-label">Risk</div>
+                                <div class="shot-stat-value">$${shot.risk.toFixed(0)}</div>
+                            </div>
+                            <div class="shot-stat">
+                                <div class="shot-stat-label">${executed ? 'Entry' : 'Trigger'}</div>
+                                <div class="shot-stat-value">${executed ? formatPrice(shot.entry) : (i === 1 ? 'Bounce' : 'Breakout')}</div>
+                            </div>
+                            ${executed ? `
+                            <div class="shot-stat">
+                                <div class="shot-stat-label">Size</div>
+                                <div class="shot-stat-value">${shot.size.toFixed(4)}</div>
+                            </div>
+                            <div class="shot-stat">
+                                <div class="shot-stat-label">Stop</div>
+                                <div class="shot-stat-value">${formatPrice(shot.stop)}</div>
+                            </div>
+                            ` : ''}
+                        </div>
+                        ${!executed && i > 0 && state.shots[i-1].executed ? `
+                        <button class="btn btn-success" style="margin-top: 8px; padding: 8px;" onclick="executeShot(${i})">
+                            Execute ${labels[i].split(' ')[0]} ${labels[i].split(' ')[1]}
+                        </button>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function executeShot(idx) {
+            const shot = state.shots[idx];
+            const riskDist = Math.abs(state.currentPrice - state.shots[0].stop);
+            const size = shot.risk / riskDist;
+            
+            state.shots[idx] = {
+                executed: true,
+                entry: state.currentPrice,
+                size: size,
+                risk: shot.risk,
+                stop: state.shots[0].stop
+            };
+            
+            // Recalc avg entry
+            let totalVal = 0, totalSize = 0;
+            state.shots.forEach(s => {
+                if (s.executed) {
+                    totalVal += s.entry * s.size;
+                    totalSize += s.size;
+                }
+            });
+            state.avgEntry = totalVal / totalSize;
+            state.totalSize = totalSize;
+            
+            // Mark budget used
+            document.getElementById(`seg${idx + 1}`).classList.add('used');
+            
+            renderShots();
+            updateMetrics();
+            drawRiskLevels();
+        }
+        
+        async function pollLivePrice() {
+            if (!state.active) return;
+            
+            try {
+                const res = await fetch(`${API}/price/${state.symbol}`);
+                const data = await res.json();
+                state.currentPrice = data.price;
+                
+                // Update display
+                updateMetrics();
+                
+                // Check stop and target hits
+                checkStopHits();
+                checkTargetHits();
+                
+            } catch (e) {
+                console.error('Price poll failed:', e);
+            }
+        }
+        
+        function checkStopHits() {
+            const atr = Math.abs(state.entryPrice - state.supportLevel) * 0.2;
+            const structural = state.direction === 'long' ?
+                state.supportLevel - atr : state.supportLevel + atr;
+            const safety = state.direction === 'long' ?
+                state.entryPrice * 0.95 : state.entryPrice * 1.05;
+            
+            if (state.direction === 'long') {
+                if (state.guardingActive && state.currentPrice < state.guardingLevel) {
+                    highlightExit('exit2', 'Guarding line broken!');
+                } else if (state.currentPrice < structural) {
+                    highlightExit('exit3', 'Structural stop hit!');
+                }
+            } else {
+                if (state.guardingActive && state.currentPrice > state.guardingLevel) {
+                    highlightExit('exit2', 'Guarding line broken!');
+                } else if (state.currentPrice > structural) {
+                    highlightExit('exit3', 'Structural stop hit!');
+                }
+            }
+        }
+        
+        function highlightExit(exitId, message) {
+            const el = document.getElementById(exitId);
+            if (el && !el.classList.contains('triggered')) {
+                el.classList.add('triggered');
+                console.warn(message);
+            }
+        }
+        
+        function activateGuarding() {
+            if (state.guardingActive) return;
+            
+            state.guardingActive = true;
+            
+            // Calculate guarding level based on current price (lock in current profit)
+            state.guardingLevel = state.direction === 'long' ?
+                state.currentPrice * 0.98 : state.currentPrice * 1.02; // 2% trailing buffer
+            
+            // Add guarding line to chart
+            priceLines.push(candleSeries.createPriceLine({
+                price: state.guardingLevel,
+                color: '#00c853',
+                lineWidth: 2,
+                lineStyle: LightweightCharts.LineStyle.Solid,
+                axisLabelVisible: true,
+                title: 'Guard',
+            }));
+            
+            // Flash animation effect
+            const panel = document.getElementById('guardingPanel');
+            panel.style.boxShadow = '0 0 30px rgba(0, 200, 83, 0.5)';
+            setTimeout(() => { panel.style.boxShadow = 'none'; }, 1000);
+            
+            document.getElementById('guardingStatus').textContent = 'ACTIVE';
+            document.getElementById('guardingStatus').className = 'guarding-status active';
+            document.getElementById('guardingStatus').style.background = 'var(--green)';
+            document.getElementById('guardingLevel').textContent = formatPrice(state.guardingLevel);
+            document.getElementById('guardingStopPrice').textContent = formatPrice(state.guardingLevel);
+            document.getElementById('stopStructural').classList.remove('active');
+            document.getElementById('stopGuarding').classList.add('guarding-active');
+            document.getElementById('activateGuardBtn').style.display = 'none';
+            document.getElementById('coneInfo').innerHTML = '<small>✅ Guard active - will exit if price closes below ' + formatPrice(state.guardingLevel) + '</small>';
+            
+            // Calculate distance to guard
+            const dist = Math.abs(state.currentPrice - state.guardingLevel) / state.currentPrice * 100;
+            document.getElementById('guardDist').textContent = dist.toFixed(1) + '%';
+            
+            setPhase(3);
+        }
+        
+        function checkTargetHits() {
+            // Check if price has reached any target level
+            const atr = Math.abs(state.entryPrice - state.supportLevel) * 0.2;
+            const structural = state.direction === 'long' ?
+                state.supportLevel - atr : state.supportLevel + atr;
+            const riskDist = Math.abs(state.entryPrice - structural);
+            
+            const t1 = state.direction === 'long' ? 
+                state.entryPrice + (riskDist * 2) : state.entryPrice - (riskDist * 2);
+            const t2 = state.direction === 'long' ? 
+                state.entryPrice + (riskDist * 3) : state.entryPrice - (riskDist * 3);
+            
+            if (state.direction === 'long') {
+                if (state.currentPrice >= t1 && state.targetsHit === 0) markTarget(1);
+                if (state.currentPrice >= t2 && state.targetsHit === 1) markTarget(2);
+            } else {
+                if (state.currentPrice <= t1 && state.targetsHit === 0) markTarget(1);
+                if (state.currentPrice <= t2 && state.targetsHit === 1) markTarget(2);
+            }
+        }
+        
+        function markTarget(num) {
+            state.targetsHit = num;
+            document.getElementById(`t${num}Circle`).classList.add('hit');
+            document.getElementById(`t${num}Circle`).textContent = '✓';
+            
+            if (num === 1) {
+                document.getElementById('coneInfo').innerHTML = '<small>🎯 T1 (2R) reached! Consider activating guard to lock profits</small>';
+            }
+            if (num === 2) setPhase(4);
+        }
+        
+        function updateMetrics() {
+            document.getElementById('metricEntry').textContent = formatPrice(state.avgEntry);
+            document.getElementById('metricSize').textContent = state.totalSize.toFixed(4);
+            document.getElementById('livePrice').textContent = formatPrice(state.currentPrice);
+            
+            // Calculate P&L
+            const pnl = state.direction === 'long' ?
+                (state.currentPrice - state.avgEntry) * state.totalSize :
+                (state.avgEntry - state.currentPrice) * state.totalSize;
+            
+            state.unrealizedPnl = pnl;
+            const pnlEl = document.getElementById('metricPnl');
+            pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(0)}`;
+            pnlEl.className = `metric-value ${pnl >= 0 ? 'green' : 'red'}`;
+            
+            document.getElementById('livePrice').className = `live-price ${pnl >= 0 ? 'up' : 'down'}`;
+            document.getElementById('metricRealized').textContent = `$${state.realizedPnl.toFixed(0)}`;
+            
+            // Calculate risk metrics
+            const atr = Math.abs(state.entryPrice - state.supportLevel) * 0.2;
+            const structural = state.direction === 'long' ?
+                state.supportLevel - atr : state.supportLevel + atr;
+            const riskDist = Math.abs(state.avgEntry - structural);
+            const currentR = pnl / (riskDist * state.totalSize);
+            
+            document.getElementById('metricBars').textContent = currentR >= 0 ? 
+                `+${currentR.toFixed(1)}R` : `${currentR.toFixed(1)}R`;
+        }
+        
+        function updateStops() {
+            const atr = (state.entryPrice - state.supportLevel) * 0.2;
+            const structural = state.direction === 'long' ?
+                state.supportLevel - atr : state.supportLevel + atr;
+            const safety = state.direction === 'long' ?
+                state.entryPrice * 0.95 : state.entryPrice * 1.05;
+            
+            document.getElementById('structuralPrice').textContent = formatPrice(structural);
+            document.getElementById('safetyPrice').textContent = formatPrice(safety);
+            
+            const t1 = state.direction === 'long' ? state.entryPrice * 1.03 : state.entryPrice * 0.97;
+            const t2 = state.direction === 'long' ? state.entryPrice * 1.06 : state.entryPrice * 0.94;
+            document.getElementById('t1Price').textContent = formatPrice(t1);
+            document.getElementById('t2Price').textContent = formatPrice(t2);
+        }
+        
+        function setPhase(num) {
+            state.phase = num;
+            for (let i = 1; i <= 4; i++) {
+                const el = document.getElementById(`phase${i}`);
+                el.classList.remove('active', 'completed');
+                if (i < num) el.classList.add('completed');
+                else if (i === num) el.classList.add('active');
+            }
+        }
+        
+        function drawRiskLevels() {
+            // Clear previous lines
+            priceLines.forEach(l => candleSeries.removePriceLine(l));
+            priceLines = [];
+            
+            // Clear line series (not using angled lines anymore)
+            guardingLineSeries.setData([]);
+            primaryStopSeries.setData([]);
+            secondaryStopSeries.setData([]);
+            safetyNetSeries.setData([]);
+            
+            // Calculate levels
+            const atr = Math.abs(state.entryPrice - state.supportLevel) * 0.2;
+            const structural = state.direction === 'long' ?
+                state.supportLevel - atr : state.supportLevel + atr;
+            const safety = state.direction === 'long' ?
+                state.entryPrice * 0.95 : state.entryPrice * 1.05;
+            
+            // Targets based on R-multiples
+            const riskDist = Math.abs(state.entryPrice - structural);
+            const t1 = state.direction === 'long' ? 
+                state.entryPrice + (riskDist * 2) : state.entryPrice - (riskDist * 2); // 2R
+            const t2 = state.direction === 'long' ? 
+                state.entryPrice + (riskDist * 3) : state.entryPrice - (riskDist * 3); // 3R
+            const t3 = state.direction === 'long' ? 
+                state.entryPrice + (riskDist * 5) : state.entryPrice - (riskDist * 5); // 5R
+            
+            // Entry line (gold)
+            priceLines.push(candleSeries.createPriceLine({
+                price: state.avgEntry,
+                color: '#ffd700',
+                lineWidth: 2,
+                lineStyle: LightweightCharts.LineStyle.Solid,
+                axisLabelVisible: true,
+                title: 'Entry',
+            }));
+            
+            // Primary Stop (red)
+            priceLines.push(candleSeries.createPriceLine({
+                price: structural,
+                color: '#dc143c',
+                lineWidth: 2,
+                lineStyle: LightweightCharts.LineStyle.Solid,
+                axisLabelVisible: true,
+                title: 'Stop',
+            }));
+            
+            // Safety Net (orange dashed)
+            priceLines.push(candleSeries.createPriceLine({
+                price: safety,
+                color: '#ff9800',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: 'Safety',
+            }));
+            
+            // Targets (cyan)
+            priceLines.push(candleSeries.createPriceLine({
+                price: t1,
+                color: '#00d9ff',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: 'T1 (2R)',
+            }));
+            
+            priceLines.push(candleSeries.createPriceLine({
+                price: t2,
+                color: '#00d9ff',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: 'T2 (3R)',
+            }));
+            
+            priceLines.push(candleSeries.createPriceLine({
+                price: t3,
+                color: '#00d9ff',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: 'T3 (5R)',
+            }));
+            
+            // Update the UI display
+            document.getElementById('t1Price').textContent = formatPrice(t1);
+            document.getElementById('t2Price').textContent = formatPrice(t2);
+        }
+        
+        function exitSession() {
+            if (!confirm('Exit all positions?')) return;
+            
+            clearInterval(simInterval);
+            
+            const finalPnl = state.direction === 'long' ?
+                (state.currentPrice - state.avgEntry) * state.totalSize :
+                (state.avgEntry - state.currentPrice) * state.totalSize;
+            
+            state.realizedPnl += finalPnl;
+            
+            alert(`Session closed.\nTotal P&L: $${state.realizedPnl.toFixed(2)}`);
+            location.reload();
+        }
+        
+        function formatPrice(price) {
+            if (!price) return '-';
+            return price >= 1000 ?
+                '$' + price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) :
+                '$' + price.toFixed(2);
+        }
+    </script>
+</body>
+</html>
