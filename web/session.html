@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BASTION - Sessions</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --bg: #0a0a0a;
+            --surface: #111111;
+            --surface-2: #1a1a1a;
+            --border: #2a2a2a;
+            --text: #e0e0e0;
+            --text-dim: #666;
+            --accent: #dc143c;
+            --green: #00c853;
+            --green-dim: rgba(0, 200, 83, 0.15);
+            --red: #dc143c;
+            --red-dim: rgba(220, 20, 60, 0.15);
+            --gold: #ffd700;
+        }
+        
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        
+        .app {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 24px 16px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: 0.15em;
+            color: #888;
+        }
+        
+        .nav {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+        
+        .nav-btn {
+            flex: 1;
+            padding: 12px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-dim);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-decoration: none;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        
+        .nav-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+        
+        .nav-btn:hover:not(.active) {
+            border-color: var(--accent);
+        }
+        
+        /* New Session Form */
+        .new-session {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        
+        .section-title {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 16px;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .form-group {
+            margin-bottom: 12px;
+        }
+        
+        .form-label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            display: block;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 10px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .dir-toggle {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .dir-btn {
+            flex: 1;
+            padding: 10px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .dir-btn.long.active {
+            background: var(--green-dim);
+            border-color: var(--green);
+            color: var(--green);
+        }
+        
+        .dir-btn.short.active {
+            background: var(--red-dim);
+            border-color: var(--red);
+            color: var(--red);
+        }
+        
+        .start-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, var(--accent) 0%, #8b0000 100%);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        
+        .start-btn:hover {
+            opacity: 0.9;
+        }
+        
+        /* Active Sessions */
+        .sessions-list {
+            margin-top: 24px;
+        }
+        
+        .session-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .session-card:hover {
+            border-color: var(--accent);
+        }
+        
+        .session-card.long {
+            border-left: 3px solid var(--green);
+        }
+        
+        .session-card.short {
+            border-left: 3px solid var(--red);
+        }
+        
+        .session-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .session-symbol {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        .session-badge {
+            font-size: 0.7rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+        
+        .session-badge.phase_1 { background: var(--gold); color: black; }
+        .session-badge.phase_2 { background: var(--green); color: black; }
+        .session-badge.active { background: var(--green-dim); color: var(--green); }
+        
+        .session-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-label {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+        
+        .stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .stat-value.positive { color: var(--green); }
+        .stat-value.negative { color: var(--red); }
+        
+        .no-sessions {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-dim);
+        }
+        
+        /* Session Detail Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 100;
+            overflow-y: auto;
+        }
+        
+        .modal.show {
+            display: block;
+        }
+        
+        .modal-content {
+            max-width: 480px;
+            margin: 24px auto;
+            padding: 0 16px;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+        
+        .close-btn {
+            width: 40px;
+            height: 40px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        
+        .detail-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .detail-title {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+        
+        .stop-levels {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .stop-level {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            background: var(--bg);
+            border-radius: 6px;
+        }
+        
+        .stop-type {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+        
+        .stop-price {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--red);
+        }
+        
+        .guarding-price {
+            color: var(--gold);
+        }
+        
+        .update-form {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .update-form input {
+            flex: 1;
+        }
+        
+        .update-btn {
+            padding: 10px 20px;
+            background: var(--accent);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+        }
+        
+        .alert-list {
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .alert-item {
+            padding: 8px;
+            background: var(--bg);
+            border-radius: 4px;
+            margin-bottom: 6px;
+            font-size: 0.85rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <div class="logo">BASTION</div>
+        </header>
+        
+        <nav class="nav">
+            <a href="index.html" class="nav-btn">Calculator</a>
+            <a href="session.html" class="nav-btn active">Sessions</a>
+        </nav>
+        
+        <!-- New Session -->
+        <div class="new-session">
+            <div class="section-title">Start New Session</div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Symbol</label>
+                    <select class="form-input" id="symbol">
+                        <option value="BTCUSDT">BTC/USDT</option>
+                        <option value="ETHUSDT">ETH/USDT</option>
+                        <option value="SOLUSDT">SOL/USDT</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Direction</label>
+                    <div class="dir-toggle">
+                        <button class="dir-btn long active" onclick="setDir('long')">Long</button>
+                        <button class="dir-btn short" onclick="setDir('short')">Short</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Support Level</label>
+                    <input type="number" class="form-input" id="support" placeholder="Auto-detect">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Account</label>
+                    <input type="number" class="form-input" id="account" value="100000">
+                </div>
+            </div>
+            
+            <button class="start-btn" onclick="startSession()">Start Session</button>
+        </div>
+        
+        <!-- Active Sessions -->
+        <div class="sessions-list">
+            <div class="section-title">Active Sessions</div>
+            <div id="sessionsList">
+                <div class="no-sessions">No active sessions</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Session Detail Modal -->
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="modalTitle">Session</div>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            
+            <div class="detail-card">
+                <div class="detail-title">Position</div>
+                <div class="session-stats">
+                    <div class="stat">
+                        <div class="stat-label">Shots</div>
+                        <div class="stat-value" id="detailShots">0/3</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Avg Entry</div>
+                        <div class="stat-value" id="detailEntry">-</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Size</div>
+                        <div class="stat-value" id="detailSize">-</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">P&L</div>
+                        <div class="stat-value" id="detailPnl">-</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="detail-card">
+                <div class="detail-title">Stop Levels</div>
+                <div class="stop-levels" id="detailStops"></div>
+            </div>
+            
+            <div class="detail-card">
+                <div class="detail-title">Take Shot</div>
+                <div class="update-form">
+                    <input type="number" class="form-input" id="shotPrice" placeholder="Entry Price">
+                    <input type="number" class="form-input" id="shotATR" placeholder="ATR" style="width:80px">
+                    <button class="update-btn" onclick="takeShot()">Enter</button>
+                </div>
+            </div>
+            
+            <div class="detail-card">
+                <div class="detail-title">Update</div>
+                <div class="update-form">
+                    <input type="number" class="form-input" id="updatePrice" placeholder="Current Price">
+                    <input type="number" class="form-input" id="updateBar" placeholder="Bar #" style="width:60px" value="1">
+                    <button class="update-btn" onclick="updateSession()">Update</button>
+                </div>
+            </div>
+            
+            <div class="detail-card">
+                <div class="detail-title">Alerts</div>
+                <div class="alert-list" id="alertList"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API = 'http://localhost:8001';
+        let currentDirection = 'long';
+        let activeSessionId = null;
+        
+        document.addEventListener('DOMContentLoaded', loadSessions);
+        
+        function setDir(dir) {
+            currentDirection = dir;
+            document.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector(`.dir-btn.${dir}`).classList.add('active');
+        }
+        
+        async function loadSessions() {
+            try {
+                const res = await fetch(`${API}/session/?active_only=true`);
+                const sessions = await res.json();
+                renderSessions(sessions);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        
+        function renderSessions(sessions) {
+            const container = document.getElementById('sessionsList');
+            
+            if (!sessions.length) {
+                container.innerHTML = '<div class="no-sessions">No active sessions</div>';
+                return;
+            }
+            
+            container.innerHTML = sessions.map(s => `
+                <div class="session-card ${s.direction}" onclick="openSession('${s.id}')">
+                    <div class="session-header">
+                        <span class="session-symbol">${s.symbol} ${s.direction.toUpperCase()}</span>
+                        <span class="session-badge ${s.phase}">${s.phase.replace('_', ' ')}</span>
+                    </div>
+                    <div class="session-stats">
+                        <div class="stat">
+                            <div class="stat-label">Shots</div>
+                            <div class="stat-value">${s.shots_taken}/${s.max_shots}</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Entry</div>
+                            <div class="stat-value">$${s.position.average_entry.toLocaleString()}</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Bars</div>
+                            <div class="stat-value">${s.tracking.bars_in_trade}</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">P&L</div>
+                            <div class="stat-value ${s.pnl.total >= 0 ? 'positive' : 'negative'}">
+                                ${s.pnl.total >= 0 ? '+' : ''}$${s.pnl.total.toFixed(0)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        async function startSession() {
+            const symbol = document.getElementById('symbol').value;
+            const support = parseFloat(document.getElementById('support').value) || 90000;
+            const account = parseFloat(document.getElementById('account').value) || 100000;
+            
+            try {
+                const res = await fetch(`${API}/session/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        symbol,
+                        direction: currentDirection,
+                        timeframe: '4h',
+                        account_balance: account,
+                        structural_support: support,
+                        targets: [
+                            { price: support * 1.05, exit_percentage: 33, reason: 'T1' },
+                            { price: support * 1.08, exit_percentage: 33, reason: 'T2' },
+                            { price: support * 1.12, exit_percentage: 34, reason: 'T3' }
+                        ]
+                    })
+                });
+                
+                const session = await res.json();
+                loadSessions();
+                openSession(session.id);
+            } catch (e) {
+                alert('Failed to create session: ' + e.message);
+            }
+        }
+        
+        async function openSession(id) {
+            activeSessionId = id;
+            
+            try {
+                const res = await fetch(`${API}/session/${id}`);
+                const session = await res.json();
+                
+                document.getElementById('modalTitle').textContent = `${session.symbol} ${session.direction.toUpperCase()}`;
+                document.getElementById('detailShots').textContent = `${session.shots_taken}/${session.max_shots}`;
+                document.getElementById('detailEntry').textContent = session.position.average_entry > 0 
+                    ? `$${session.position.average_entry.toLocaleString()}` : '-';
+                document.getElementById('detailSize').textContent = session.position.total_size > 0
+                    ? session.position.total_size.toFixed(4) : '-';
+                
+                const pnl = session.pnl.total;
+                const pnlEl = document.getElementById('detailPnl');
+                pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(0)}`;
+                pnlEl.className = `stat-value ${pnl >= 0 ? 'positive' : 'negative'}`;
+                
+                // Stops
+                let stopsHtml = `
+                    <div class="stop-level">
+                        <span class="stop-type">Structural</span>
+                        <span class="stop-price">$${session.stops.structural.toLocaleString()}</span>
+                    </div>
+                `;
+                if (session.stops.guarding_level) {
+                    stopsHtml += `
+                        <div class="stop-level">
+                            <span class="stop-type">Guarding ${session.stops.guarding_active ? '(Active)' : ''}</span>
+                            <span class="stop-price guarding-price">$${session.stops.guarding_level.toLocaleString()}</span>
+                        </div>
+                    `;
+                }
+                stopsHtml += `
+                    <div class="stop-level">
+                        <span class="stop-type">Safety Net</span>
+                        <span class="stop-price">$${session.stops.safety_net.toLocaleString()}</span>
+                    </div>
+                `;
+                document.getElementById('detailStops').innerHTML = stopsHtml;
+                
+                document.getElementById('updateBar').value = session.tracking.bars_in_trade + 1;
+                
+                document.getElementById('modal').classList.add('show');
+            } catch (e) {
+                alert('Failed to load session');
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('modal').classList.remove('show');
+            activeSessionId = null;
+            loadSessions();
+        }
+        
+        async function takeShot() {
+            const price = parseFloat(document.getElementById('shotPrice').value);
+            const atr = parseFloat(document.getElementById('shotATR').value) || 500;
+            
+            if (!price) return alert('Enter price');
+            
+            try {
+                await fetch(`${API}/session/${activeSessionId}/shot`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ entry_price: price, current_atr: atr })
+                });
+                
+                addAlert(`Shot taken at $${price.toLocaleString()}`);
+                openSession(activeSessionId);
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            }
+        }
+        
+        async function updateSession() {
+            const price = parseFloat(document.getElementById('updatePrice').value);
+            const bar = parseInt(document.getElementById('updateBar').value);
+            
+            if (!price) return alert('Enter price');
+            
+            try {
+                const res = await fetch(`${API}/session/${activeSessionId}/update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ current_price: price, current_bar: bar })
+                });
+                
+                const update = await res.json();
+                
+                update.alerts.forEach(a => addAlert(a));
+                
+                if (update.exit_signal) {
+                    addAlert(`EXIT SIGNAL: ${update.exit_reason} - ${update.exit_percentage}%`);
+                }
+                
+                document.getElementById('updateBar').value = bar + 1;
+                openSession(activeSessionId);
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            }
+        }
+        
+        function addAlert(msg) {
+            const list = document.getElementById('alertList');
+            const div = document.createElement('div');
+            div.className = 'alert-item';
+            div.textContent = msg;
+            list.insertBefore(div, list.firstChild);
+        }
+    </script>
+</body>
+</html>

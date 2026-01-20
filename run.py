@@ -12,7 +12,12 @@ Server will start on http://localhost:8001
 
 import uvicorn
 import os
+import sys
+from pathlib import Path
 from dotenv import load_dotenv
+
+# Add current directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent))
 
 # Load environment variables
 load_dotenv()
@@ -22,13 +27,13 @@ if __name__ == "__main__":
     port = int(os.getenv("API_PORT", "8001"))
     
     print(f"""
-    ╔═══════════════════════════════════════════════╗
-    ║                                               ║
-    ║              BASTION API Server               ║
-    ║                                               ║
-    ║      Proactive Risk Management                ║
-    ║                                               ║
-    ╚═══════════════════════════════════════════════╝
+    +-----------------------------------------------+
+    |                                               |
+    |              BASTION API Server               |
+    |                                               |
+    |      Proactive Risk Management                |
+    |                                               |
+    +-----------------------------------------------+
     
     Starting server on http://{host}:{port}
     
