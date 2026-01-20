@@ -1,0 +1,27 @@
+# BASTION Risk Management API
+# Python 3.10+
+
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# HTTP Client
+aiohttp==3.9.1
+httpx==0.25.2
+
+# Data Processing
+pandas==2.1.4
+numpy==1.26.2
+
+# CORS
+python-cors==1.0.0
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# Existing MCF Dependencies (already in MCF-Project)
+# These should already be installed:
+# - riskshield core modules
+# - mcf_live_service modules
+
